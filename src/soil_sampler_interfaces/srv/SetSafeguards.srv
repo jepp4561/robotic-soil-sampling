@@ -1,0 +1,5 @@
+float32 max_force
+uint32 max_hall_count
+---
+bool success
+string message

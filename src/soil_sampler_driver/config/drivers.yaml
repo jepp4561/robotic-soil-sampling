@@ -1,0 +1,6 @@
+/teros12:
+  ros__parameters:
+    port: "/dev/serial/by-id/usb-Apogee_Instruments__Inc._Sensor_Interface_B16392460F001A00-if00"
+    baudrate: 9600
+    frame_id: "soil_sensor"
+    measurement_period: 1.0

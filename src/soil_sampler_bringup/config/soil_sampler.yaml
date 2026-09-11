@@ -1,0 +1,17 @@
+/soil_sampler/teros12:
+  ros__parameters:
+    port: "/dev/serial/by-id/usb-Apogee_Instruments__Inc._Sensor_Interface_B16392460F001A00-if00"
+    baudrate: 9600
+    address: "0"
+    frame_id: "soil_sensor"
+    measurement_period: 1.0
+
+/soil_sampler/soil_sampler:
+  ros__parameters:
+    maximum_depth: 0.2
+    maximum_force: 30.0
+
+    insertion_timeout: 30.0
+    retraction_timeout: 30.0
+
+    position_tolerance: 2.0

@@ -1,0 +1,7 @@
+[submodule "firmware/soil_sampler_pico/external/pico-sdk"]
+	path = firmware/soil_sampler_pico/external/pico-sdk
+	url = https://github.com/raspberrypi/pico-sdk
+[submodule "firmware/soil_sampler_pico/external/micro_ros_raspberrypi_pico_sdk"]
+	path = firmware/soil_sampler_pico/external/micro_ros_raspberrypi_pico_sdk
+	url = git@github.com:jepp4561/micro_ros_raspberrypi_pico_sdk.git
+	branch = jazzy

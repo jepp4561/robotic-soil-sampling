@@ -1,0 +1,112 @@
+#include "actuator.h"
+
+#include "hardware/gpio.h"
+#include "hardware/sync.h"
+#include "pico/stdlib.h"
+
+#define ACTUATOR_PWM_PIN 14
+#define ACTUATOR_DIR_PIN 15
+#define ACTUATOR_SLEEP_PIN 13
+#define ACTUATOR_FAULT_PIN 12
+#define ACTUATOR_HALL_PIN 11
+
+static volatile int32_t hall_count = 0;
+static volatile float position = 0;
+static volatile int8_t current_direction = 0;
+static volatile bool actuator_enabled = false;
+static const float hall_counts_per_meter = 23335.0f;
+    
+static void actuator_hall_callback(uint gpio, uint32_t events) {
+    if (gpio != ACTUATOR_HALL_PIN) {
+        return;
+    }
+
+    if ((events & GPIO_IRQ_EDGE_RISE) != 0) {
+        if (current_direction == 1) {
+            ++hall_count;
+        } else if (current_direction == -1) {
+            --hall_count;
+        }
+    }
+}
+
+bool actuator_init(void) {
+    gpio_init(ACTUATOR_PWM_PIN);
+    gpio_set_dir(ACTUATOR_PWM_PIN, GPIO_OUT);
+    gpio_put(ACTUATOR_PWM_PIN, 0);
+
+    gpio_init(ACTUATOR_DIR_PIN);
+    gpio_set_dir(ACTUATOR_DIR_PIN, GPIO_OUT);
+    gpio_put(ACTUATOR_DIR_PIN, 0);
+
+    gpio_init(ACTUATOR_SLEEP_PIN);
+    gpio_set_dir(ACTUATOR_SLEEP_PIN, GPIO_OUT);
+    gpio_put(ACTUATOR_SLEEP_PIN, 1);
+    actuator_enabled = true;
+
+    gpio_init(ACTUATOR_FAULT_PIN);
+    gpio_set_dir(ACTUATOR_FAULT_PIN, GPIO_IN);
+
+    gpio_init(ACTUATOR_HALL_PIN);
+    gpio_set_dir(ACTUATOR_HALL_PIN, GPIO_IN);
+    gpio_pull_down(ACTUATOR_HALL_PIN);
+
+    gpio_set_irq_enabled_with_callback(ACTUATOR_HALL_PIN, GPIO_IRQ_EDGE_RISE, true, &actuator_hall_callback);
+
+    return true;
+}
+
+void actuator_hall_reset(void) {
+    hall_count = 0;
+}
+
+void actuator_extend(void) {
+    gpio_put(ACTUATOR_DIR_PIN, 1);
+    gpio_put(ACTUATOR_PWM_PIN, 1);
+    current_direction = 1;
+}
+
+void actuator_retract(void) {
+    gpio_put(ACTUATOR_DIR_PIN, 0);
+    gpio_put(ACTUATOR_PWM_PIN, 1);
+    current_direction = -1;
+}
+
+void actuator_stop(void) {
+    gpio_put(ACTUATOR_PWM_PIN, 0);
+    current_direction = 0;
+}
+
+void actuator_enable(bool enable) {
+    gpio_put(ACTUATOR_SLEEP_PIN, enable ? 1 : 0);
+    actuator_enabled = enable;
+
+    if (!enable) {
+        actuator_stop();
+    }
+}
+
+bool actuator_is_enabled(void) {
+    return actuator_enabled;
+}
+
+bool actuator_fault_active(void) {
+    return gpio_get(ACTUATOR_FAULT_PIN) == 0;
+}
+
+int32_t actuator_get_hall_count(void) {
+    uint32_t interrupts = save_and_disable_interrupts();
+    int32_t count = hall_count;
+    restore_interrupts(interrupts);
+
+    return count;
+}
+
+float actuator_get_position(void) {
+    int32_t count = actuator_get_hall_count();
+    return (float)(count / hall_counts_per_meter);
+}
+
+int8_t actuator_get_direction(void) {
+    return current_direction;
+}

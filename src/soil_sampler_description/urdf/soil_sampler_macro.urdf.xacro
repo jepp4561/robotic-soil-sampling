@@ -1,0 +1,73 @@
+<?xml version="1.0"?>
+
+<robot xmlns:xacro="http://www.ros.org/wiki/xacro">
+
+<xacro:macro name="soil_sampler" params=" parent_link:='' mount_xyz:='0 0 0' mount_rpy:='0 0 0' ">
+
+<link name="soil_sampler_root"/>
+
+<link name="soil_sampler_frame">
+    <inertial>
+        <mass value="0.00461699"/>
+        <origin xyz="0 0 0" rpy="0 0 0"/>
+        <inertia ixx="0.000260854" ixy="0" ixz="0" iyy="0.000195882" iyz="1.5257e-05" izz="0.000154911"/>
+    </inertial>
+
+    <visual>
+        <origin xyz="0 0 0" rpy="0 0 0"/>
+        <geometry>
+            <mesh
+                filename="package://soil_sampler_description/meshes/Frame.stl"
+                scale="1 1 1"/>
+        </geometry>
+        <material name="frame_material">
+            <color rgba="0.615686 0.811765 0.929412 1"/>
+        </material>
+    </visual>
+</link>
+
+<link name="soil_sampler_piston">
+    <inertial>
+        <mass value="0.000682764"/>
+        <origin xyz="0 0 0" rpy="0 0 0"/>
+        <inertia ixx="8.33755e-06" ixy="0" ixz="0" iyy="8.95209e-06" iyz="0" izz="7.28735e-07"/>
+    </inertial>
+
+    <visual>
+        <origin xyz="0 0 0" rpy="0 0 0"/>
+        <geometry>
+            <mesh
+                filename="package://soil_sampler_description/meshes/Piston.stl"
+                scale="1 1 1"/>
+        </geometry>
+        <material name="piston_material">
+            <color rgba="0.498039 0.498039 0.498039 1"/>
+        </material>
+    </visual>
+</link>
+
+<xacro:if value="${parent_link != ''}">
+    <joint name="soil_sampler_mount_joint" type="fixed">
+        <origin xyz="${mount_xyz}" rpy="${mount_rpy}"/>
+        <parent link="${parent_link}"/>
+        <child link="soil_sampler_root"/>
+    </joint>
+</xacro:if>
+
+<joint name="soil_sampler_hanging_node_to_root_joint" type="fixed">
+    <origin xyz="0 0 0" rpy="0 0 0"/>
+    <parent link="soil_sampler_root"/>
+    <child link="soil_sampler_frame"/>
+</joint>
+
+<joint name="soil_sampler_slider_1" type="prismatic">
+    <origin xyz="0 0 0" rpy="0 0 0"/>
+    <axis xyz="0 0 -1"/>
+    <parent link="soil_sampler_frame"/>
+    <child link="soil_sampler_piston"/>
+    <limit effort="3000" velocity="0.01" lower="0" upper="0.2" acceleration="100" deceleration="100"/>
+</joint>
+
+</xacro:macro>
+
+</robot>
