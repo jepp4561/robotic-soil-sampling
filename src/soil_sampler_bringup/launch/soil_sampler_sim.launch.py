@@ -13,38 +13,38 @@ def launch_setup(context, *args, **kwargs):
     controller_manager = LaunchConfiguration("controller_manager").perform(context)
     tool_namespace = LaunchConfiguration("tool_namespace").perform(context)
 
-    position_controller_fqn = f"/{robot_namespace}/soil_sampler_position_controller"
-    joint_states_topic = f"/{robot_namespace}/joint_states"
+    velocity_controller_fqn = f"/{robot_namespace}/soil_sampler_velocity_controller"
+    joint_states_topic = f"/{robot_namespace}/platform/joint_states"
 
     configure_script = f"""
     set -e
 
     until ros2 param set {controller_manager} \\
-        soil_sampler_position_controller.type \\
-        position_controllers/JointGroupPositionController \\
+        soil_sampler_velocity_controller.type \\
+        velocity_controllers/JointGroupVelocityController \\
         > /dev/null 2>&1; do
       sleep 1
     done
 
     until ros2 run controller_manager spawner \\
-        soil_sampler_position_controller \\
+        soil_sampler_velocity_controller \\
         --controller-manager {controller_manager} \\
         --load-only > /dev/null 2>&1; do
       sleep 1
     done
 
-    until ros2 param set {position_controller_fqn} \\
+    until ros2 param set {velocity_controller_fqn} \\
         joints "[soil_sampler_slider_1]" > /dev/null 2>&1; do
       sleep 1
     done
 
-    until ros2 param set {position_controller_fqn} \\
-        interface_name position > /dev/null 2>&1; do
+    until ros2 param set {velocity_controller_fqn} \\
+        interface_name velocity > /dev/null 2>&1; do
       sleep 1
     done
 
     until ros2 run controller_manager spawner \\
-        soil_sampler_position_controller \\
+        soil_sampler_velocity_controller \\
         --controller-manager {controller_manager} \\
         > /dev/null 2>&1; do
       sleep 1
@@ -65,13 +65,13 @@ def launch_setup(context, *args, **kwargs):
             {
                 "joint_name": "soil_sampler_slider_1",
                 "position_min": 0.0,
-                "position_max": 0.2,
+                "position_max": 0.25,
                 "velocity": 0.01,
             }
         ],
         remappings=[
             ("joint_states", joint_states_topic),
-            ("position_command", f"{position_controller_fqn}/commands"),
+            ("velocity_command", f"{velocity_controller_fqn}/commands"),
         ],
     )
 

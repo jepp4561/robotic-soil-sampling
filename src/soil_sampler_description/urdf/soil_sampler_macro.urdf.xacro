@@ -65,7 +65,7 @@
     <axis xyz="0 0 -1"/>
     <parent link="soil_sampler_frame"/>
     <child link="soil_sampler_piston"/>
-    <limit effort="3000" velocity="0.01" lower="0" upper="0.2" acceleration="100" deceleration="100"/>
+    <limit effort="3000" velocity="0.02" lower="-0.0" upper="0.3" acceleration="100" deceleration="100"/>
 </joint>
 
 </xacro:macro>

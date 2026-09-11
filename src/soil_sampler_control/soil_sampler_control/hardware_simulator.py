@@ -18,7 +18,7 @@ class SimulatedSoilSamplerPico(Node):
 
         self.declare_parameter("joint_name", "soil_sampler_slider_1")
         self.declare_parameter("lower_limit", 0.0)
-        self.declare_parameter("upper_limit", 0.2)
+        self.declare_parameter("upper_limit", 0.25)
         self.declare_parameter("calibration_tolerance", 0.002)
         self.declare_parameter("load_cell_mean", 0.0)
         self.declare_parameter("load_cell_stddev", 0.5)
