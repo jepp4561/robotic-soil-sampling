@@ -64,8 +64,8 @@ def launch_setup(context, *args, **kwargs):
         parameters=[
             {
                 "joint_name": "soil_sampler_slider_1",
-                "position_min": 0.0,
-                "position_max": 0.25,
+                "lower_limit": 0.0,
+                "upper_limit": 0.25,
                 "velocity": 0.01,
             }
         ],
