@@ -26,12 +26,7 @@ class SamplerMeasurement:
 
 class SamplerStateMachine:
 
-    def __init__(
-        self,
-        maximum_depth: float,
-        maximum_force: float,
-        maximum_attempts: int = 3,
-    ) -> None:
+    def __init__(self, maximum_depth: float, maximum_force: float, maximum_attempts: int = 3) -> None:
         self.maximum_depth = maximum_depth
         self.maximum_force = maximum_force
         self.maximum_attempts = maximum_attempts
@@ -45,38 +40,23 @@ class SamplerStateMachine:
         self.measurement = SamplerMeasurement()
         self.insertion_attempt = 0
 
-    def validate_target_depth(
-        self,
-        target_depth: float,
-    ) -> tuple[bool, str]:
+    def validate_target_depth(self, target_depth: float) -> tuple[bool, str]:
         if target_depth <= 0.0:
             return False, "Target depth must be greater than zero."
 
         if target_depth > self.maximum_depth:
             return (
                 False,
-                (
-                    f"Target depth {target_depth:.3f} mm exceeds "
-                    f"maximum depth {self.maximum_depth:.3f} m."
-                ),
+                (f"Target depth {target_depth:.3f} mm exceeds " f"maximum depth {self.maximum_depth:.3f} m."),
             )
 
         return True, ""
 
-    def update_actuator_measurement(
-        self,
-        depth: float,
-        force: float,
-    ) -> None:
+    def update_actuator_measurement(self, depth: float, force: float) -> None:
         self.measurement.depth = depth
         self.measurement.force = force
 
-    def update_soil_measurement(
-        self,
-        vwc: float | None = None,
-        temperature: float | None = None,
-        ec: float | None = None,
-    ) -> None:
+    def update_soil_measurement(self, vwc: float | None = None, temperature: float | None = None, ec: float | None = None) -> None:
         if vwc is not None:
             self.measurement.vwc = vwc
 
@@ -90,21 +70,13 @@ class SamplerStateMachine:
         if self.measurement.depth > self.maximum_depth:
             return (
                 False,
-                (
-                    f"Maximum depth exceeded: "
-                    f"{self.measurement.depth:.3f} > "
-                    f"{self.maximum_depth:.3f} m."
-                ),
+                (f"Maximum depth exceeded: " f"{self.measurement.depth:.3f} > " f"{self.maximum_depth:.3f} m."),
             )
 
         if self.measurement.force > self.maximum_force:
             return (
                 False,
-                (
-                    f"Maximum force exceeded: "
-                    f"{self.measurement.force:.1f} > "
-                    f"{self.maximum_force:.1f} N."
-                ),
+                (f"Maximum force exceeded: " f"{self.measurement.force:.1f} > " f"{self.maximum_force:.1f} N."),
             )
 
         return True, ""
@@ -113,22 +85,13 @@ class SamplerStateMachine:
         if self.measurement.depth > self.maximum_depth:
             return (
                 False,
-                (
-                    f"Maximum depth exceeded: "
-                    f"{self.measurement.depth:.3f} > "
-                    f"{self.maximum_depth:.3f} m."
-                ),
+                (f"Maximum depth exceeded: " f"{self.measurement.depth:.3f} > " f"{self.maximum_depth:.3f} m."),
             )
 
         if self.measurement.force > self.maximum_force:
             return (
                 False,
-                (
-                    f"Rock detected at "
-                    f"{self.measurement.depth:.3f} m: "
-                    f"force {self.measurement.force:.1f} > "
-                    f"{self.maximum_force:.1f} N."
-                ),
+                (f"Rock detected at " f"{self.measurement.depth:.3f} m: " f"force {self.measurement.force:.1f} > " f"{self.maximum_force:.1f} N."),
             )
 
         return True, ""
@@ -162,7 +125,4 @@ class SamplerStateMachine:
         return self.insertion_attempt
 
     def attempts_remaining(self) -> int:
-        return max(
-            0,
-            self.maximum_attempts - self.insertion_attempt,
-        )
+        return max(0, self.maximum_attempts - self.insertion_attempt)

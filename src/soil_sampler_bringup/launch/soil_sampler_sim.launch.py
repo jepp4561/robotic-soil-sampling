@@ -19,34 +19,23 @@ def launch_setup(context, *args, **kwargs):
     configure_script = f"""
     set -e
 
-    until ros2 param set {controller_manager} \\
-        soil_sampler_velocity_controller.type \\
-        velocity_controllers/JointGroupVelocityController \\
-        > /dev/null 2>&1; do
+    until ros2 param set {controller_manager} soil_sampler_velocity_controller.type velocity_controllers/JointGroupVelocityController > /dev/null 2>&1; do
       sleep 1
     done
 
-    until ros2 run controller_manager spawner \\
-        soil_sampler_velocity_controller \\
-        --controller-manager {controller_manager} \\
-        --load-only > /dev/null 2>&1; do
+    until ros2 run controller_manager spawner soil_sampler_velocity_controller --controller-manager {controller_manager} --load-only > /dev/null 2>&1; do
       sleep 1
     done
 
-    until ros2 param set {velocity_controller_fqn} \\
-        joints "[soil_sampler_slider_1]" > /dev/null 2>&1; do
+    until ros2 param set {velocity_controller_fqn} joints "[soil_sampler_slider_1]" > /dev/null 2>&1; do
       sleep 1
     done
 
-    until ros2 param set {velocity_controller_fqn} \\
-        interface_name velocity > /dev/null 2>&1; do
+    until ros2 param set {velocity_controller_fqn} interface_name velocity > /dev/null 2>&1; do
       sleep 1
     done
 
-    until ros2 run controller_manager spawner \\
-        soil_sampler_velocity_controller \\
-        --controller-manager {controller_manager} \\
-        > /dev/null 2>&1; do
+    until ros2 run controller_manager spawner soil_sampler_velocity_controller --controller-manager {controller_manager} > /dev/null 2>&1; do
       sleep 1
     done
     """
@@ -80,6 +69,12 @@ def launch_setup(context, *args, **kwargs):
 
 def generate_launch_description():
 
+    config_file = os.path.join(
+        get_package_share_directory("soil_sampler_bringup"),
+        "config",
+        "soil_sampler.yaml",
+    )
+
     declare_robot_namespace = DeclareLaunchArgument(
         "robot_namespace",
         default_value="husky",
@@ -100,4 +95,13 @@ def generate_launch_description():
         declare_controller_manager,
         declare_tool_namespace,
         OpaqueFunction(function=launch_setup),
+
+        Node(
+            package="soil_sampler_control",
+            executable="soil_sampler_node",
+            name="soil_sampler",
+            namespace="soil_sampler",
+            output="screen",
+            parameters=[config_file],
+        ),
     ])

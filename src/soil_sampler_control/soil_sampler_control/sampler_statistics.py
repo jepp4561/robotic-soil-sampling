@@ -16,13 +16,6 @@ def calculate_statistics(values: Sequence[float]) -> Statistics:
         raise ValueError("Cannot calculate statistics from empty data.")
 
     mean = sum(values) / len(values)
+    variance = sum((value - mean) ** 2 for value in values) / len(values)
 
-    variance = sum(
-        (value - mean) ** 2
-        for value in values
-    ) / len(values)
-
-    return Statistics(
-        mean=mean,
-        stddev=sqrt(variance),
-    )
+    return Statistics(mean=mean, stddev=sqrt(variance))

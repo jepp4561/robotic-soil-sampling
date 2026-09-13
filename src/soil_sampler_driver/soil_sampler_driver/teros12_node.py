@@ -26,59 +26,29 @@ class Teros12Node(Node):
         self.frame_id = self.get_parameter("frame_id").value
         self.measurement_period = self.get_parameter("measurement_period").value
 
-        self.vwc_publisher = self.create_publisher(
-            Float32,
-            "teros12/volumetric_water_content",
-            10
-        )
-
-        self.temperature_publisher = self.create_publisher(
-            Temperature,
-            "teros12/temperature",
-            10
-        )
-
-        self.ec_publisher = self.create_publisher(
-            Float32,
-            "teros12/electrical_conductivity",
-            10
-        )
+        self.vwc_publisher = self.create_publisher(Float32, "teros12/volumetric_water_content", 10)
+        self.temperature_publisher = self.create_publisher(Temperature, "teros12/temperature", 10)
+        self.ec_publisher = self.create_publisher(Float32, "teros12/electrical_conductivity", 10)
 
         self.serial = None
 
         self.connect()
 
-        self.timer = self.create_timer(
-            self.measurement_period,
-            self.measurement_callback
-        )
+        self.timer = self.create_timer(self.measurement_period, self.measurement_callback)
 
     def connect(self):
         try:
-            self.serial = serial.Serial(
-                port=self.port,
-                baudrate=self.baudrate,
-                bytesize=serial.EIGHTBITS,
-                parity=serial.PARITY_NONE,
-                stopbits=serial.STOPBITS_ONE,
-                timeout=2.0
-            )
+            self.serial = serial.Serial(port=self.port, baudrate=self.baudrate, bytesize=serial.EIGHTBITS, parity=serial.PARITY_NONE, stopbits=serial.STOPBITS_ONE, timeout=2.0)
 
-            self.get_logger().info(
-                f"Connected to TEROS 12 on {self.port}"
-            )
+            self.get_logger().info(f"Connected to TEROS 12 on {self.port}")
 
             response = self.send_command(f"{self.address}I!")
 
             if response is not None:
-                self.get_logger().info(
-                    f"TEROS 12 identification: {response!r}"
-                )
+                self.get_logger().info(f"TEROS 12 identification: {response!r}")
 
         except serial.SerialException as error:
-            self.get_logger().error(
-                f"Failed to open TEROS 12 serial port: {error}"
-            )
+            self.get_logger().error(f"Failed to open TEROS 12 serial port: {error}")
             self.serial = None
 
     def send_command(self, command):
@@ -92,16 +62,12 @@ class Teros12Node(Node):
             self.serial.write((command + "\r\n").encode())
             self.serial.flush()
 
-            response = self.serial.readline().decode(
-                errors="replace"
-            )
+            response = self.serial.readline().decode(errors="replace")
 
             return response
 
         except serial.SerialException as error:
-            self.get_logger().error(
-                f"Serial communication error: {error}"
-            )
+            self.get_logger().error(f"Serial communication error: {error}")
             return None
 
     def measurement_callback(self):
@@ -116,9 +82,7 @@ class Teros12Node(Node):
         if response is None:
             return
 
-        self.get_logger().debug(
-            f"Raw TEROS 12 response: {response!r}"
-        )
+        self.get_logger().debug(f"Raw TEROS 12 response: {response!r}")
 
         self.parse_measurement(response)
 
@@ -130,9 +94,7 @@ class Teros12Node(Node):
         values = re.findall(number_pattern, response)
 
         if len(values) < 3:
-            self.get_logger().warning(
-                f"Could not find three measurements in response: {response!r}"
-            )
+            self.get_logger().warning(f"Could not find three measurements in response: {response!r}")
             return
 
         try:
@@ -140,9 +102,7 @@ class Teros12Node(Node):
             temperature = float(values[-2])
             ec = float(values[-1])
         except ValueError:
-            self.get_logger().warning(
-                f"Could not parse measurement values: {response!r}"
-            )
+            self.get_logger().warning(f"Could not parse measurement values: {response!r}")
             return
 
         now = self.get_clock().now().to_msg()

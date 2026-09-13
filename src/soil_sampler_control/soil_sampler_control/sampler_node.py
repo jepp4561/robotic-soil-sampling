@@ -33,106 +33,25 @@ class SoilSamplerNode(Node):
         self.declare_parameter("maximum_attempts", 3)
         self.declare_parameter("reposition_distance", 0.05)
 
-        self.maximum_depth = float(
-            self.get_parameter("maximum_depth").value
-        )
-
-        self.maximum_force = float(
-            self.get_parameter("maximum_force").value
-        )
-
-        self.insertion_timeout = float(
-            self.get_parameter("insertion_timeout").value
-        )
-
-        self.retraction_timeout = float(
-            self.get_parameter("retraction_timeout").value
-        )
-
-        self.position_tolerance = float(
-            self.get_parameter("position_tolerance").value
-        )
-
-        self.measurement_timeout = float(
-            self.get_parameter("measurement_timeout").value
-        )
-
-        self.maximum_attempts = int(
-            self.get_parameter("maximum_attempts").value
-        )
-
-        self.reposition_distance = float(
-            self.get_parameter("reposition_distance").value
-        )
-
-        self.state_machine = SamplerStateMachine(
-            maximum_depth=self.maximum_depth,
-            maximum_force=self.maximum_force,
-            maximum_attempts=self.maximum_attempts,
-        )
+        self.maximum_depth = float(self.get_parameter("maximum_depth").value)
+        self.maximum_force = float(self.get_parameter("maximum_force").value)
+        self.insertion_timeout = float(self.get_parameter("insertion_timeout").value)
+        self.retraction_timeout = float(self.get_parameter("retraction_timeout").value)
+        self.position_tolerance = float(self.get_parameter("position_tolerance").value)
+        self.measurement_timeout = float(self.get_parameter("measurement_timeout").value)
+        self.maximum_attempts = int(self.get_parameter("maximum_attempts").value)
+        self.reposition_distance = float(self.get_parameter("reposition_distance").value)
+        self.state_machine = SamplerStateMachine(maximum_depth=self.maximum_depth, maximum_force=self.maximum_force, maximum_attempts=self.maximum_attempts)
 
         self.callback_group = ReentrantCallbackGroup()
-
-        self.robot_move_client = ActionClient(
-            self,
-            MoveRelative,
-            "/robot/move_relative",
-            callback_group=self.callback_group,
-        )
-
-        self.actuator_command_publisher = self.create_publisher(
-            ActuatorCommand,
-            "actuator_command",
-            10,
-        )
-
-        self.actuator_state_subscription = self.create_subscription(
-            ActuatorState,
-            "actuator_state",
-            self.actuator_state_callback,
-            10,
-            callback_group=self.callback_group,
-        )
-
-        self.force_subscription = self.create_subscription(
-            Float32,
-            "load_cell_reading",
-            self.force_callback,
-            10,
-            callback_group=self.callback_group,
-        )
-
-        self.vwc_subscription = self.create_subscription(
-            Float32,
-            "teros12/volumetric_water_content",
-            self.vwc_callback,
-            10,
-            callback_group=self.callback_group,
-        )
-
-        self.temperature_subscription = self.create_subscription(
-            Temperature,
-            "teros12/temperature",
-            self.temperature_callback,
-            10,
-            callback_group=self.callback_group,
-        )
-
-        self.ec_subscription = self.create_subscription(
-            Float32,
-            "teros12/electrical_conductivity",
-            self.ec_callback,
-            10,
-            callback_group=self.callback_group,
-        )
-
-        self.action_server = ActionServer(
-            self,
-            TakeSoilSample,
-            "take_sample",
-            self.execute_sample,
-            callback_group=self.callback_group,
-        )
+        self.robot_move_client = ActionClient(self, MoveRelative, "/robot/move_relative", callback_group=self.callback_group)
+        self.actuator_command_publisher = self.create_publisher(ActuatorCommand, "actuator_command", 10)
+        self.actuator_state_subscription = self.create_subscription(ActuatorState, "actuator_state", self.actuator_state_callback, 10, callback_group=self.callback_group)
+        self.force_subscription = self.create_subscription(Float32, "load_cell_reading", self.force_callback, 10, callback_group=self.callback_group)
+        self.vwc_subscription = self.create_subscription(Float32, "teros12/volumetric_water_content", self.vwc_callback, 10, callback_group=self.callback_group)
+        self.temperature_subscription = self.create_subscription(Temperature, "teros12/temperature", self.temperature_callback, 10, callback_group=self.callback_group)
+        self.ec_subscription = self.create_subscription(Float32, "teros12/electrical_conductivity", self.ec_callback, 10, callback_group=self.callback_group)
+        self.action_server = ActionServer(self, TakeSoilSample, "take_sample", self.execute_sample, callback_group=self.callback_group)
 
         self.current_actuator_state: ActuatorState | None = None
         self.latest_force: float | None = None
@@ -142,48 +61,24 @@ class SoilSamplerNode(Node):
 
         self.sampling_active = False
 
-        self.get_logger().info(
-            "Soil sampler control node started."
-        )
+        self.get_logger().info("Soil sampler control node started.")
 
-    def actuator_state_callback(
-        self,
-        message: ActuatorState,
-    ) -> None:
+    def actuator_state_callback(self, message: ActuatorState) -> None:
         self.current_actuator_state = message
 
-        force = (
-            self.latest_force
-            if self.latest_force is not None
-            else 0.0
-        )
+        force = self.latest_force if self.latest_force is not None else 0.0
 
         self.state_machine.update_actuator_measurement(
             depth=float(message.position),
             force=force,
         )
 
-    def force_callback(
-        self,
-        message: Float32,
-    ) -> None:
+    def force_callback(self, message: Float32) -> None:
         self.latest_force = float(message.data)
+        depth = float(self.current_actuator_state.position) if self.current_actuator_state is not None else 0.0
+        self.state_machine.update_actuator_measurement(depth=depth, force=self.latest_force)
 
-        depth = (
-            float(self.current_actuator_state.position)
-            if self.current_actuator_state is not None
-            else 0.0
-        )
-
-        self.state_machine.update_actuator_measurement(
-            depth=depth,
-            force=self.latest_force,
-        )
-
-    def vwc_callback(
-        self,
-        message: Float32,
-    ) -> None:
+    def vwc_callback(self, message: Float32) -> None:
         self.latest_vwc = float(message.data)
 
     def temperature_callback(
@@ -192,10 +87,7 @@ class SoilSamplerNode(Node):
     ) -> None:
         self.latest_temperature = float(message.temperature)
 
-    def ec_callback(
-        self,
-        message: Float32,
-    ) -> None:
+    def ec_callback(self, message: Float32) -> None:
         self.latest_ec = float(message.data)
 
     def publish_stop_command(self) -> None:
@@ -231,15 +123,7 @@ class SoilSamplerNode(Node):
 
         return bool(self.current_actuator_state.enabled)
 
-    def wait_for_position(
-        self,
-        target_position: float,
-        direction: int,
-        timeout: float,
-        goal_handle,
-        feedback,
-        detect_rock: bool = False,
-    ) -> tuple[bool, str, bool]:
+    def wait_for_position(self, target_position: float, direction: int, timeout: float, goal_handle, feedback, detect_rock: bool = False) -> tuple[bool, str, bool]:
         start_time = time.monotonic()
 
         while True:
@@ -255,19 +139,11 @@ class SoilSamplerNode(Node):
                 safe, reason = self.state_machine.insertion_safety_check()
 
                 if not safe:
-                    if (
-                        self.state_machine.measurement.force
-                        > self.maximum_force
-                    ):
+                    if self.state_machine.measurement.force > self.maximum_force:
                         self.publish_stop_command()
                         self.state_machine.rock_detected()
 
-                        self.get_logger().warning(
-                            f"Rock detected at "
-                            f"{self.state_machine.measurement.depth:.2f} m. "
-                            f"with force "
-                            f"{self.state_machine.measurement.force:.2f} N."
-                        )
+                        self.get_logger().warning(f"Rock detected at " f"{self.state_machine.measurement.depth:.2f} m. " f"with force " f"{self.state_machine.measurement.force:.2f} N.")
 
                         return False, reason, True
 
@@ -284,10 +160,7 @@ class SoilSamplerNode(Node):
             position = self.actuator_position()
 
             if position is None:
-                if (
-                    time.monotonic() - start_time
-                    > self.measurement_timeout
-                ):
+                if time.monotonic() - start_time > self.measurement_timeout:
                     self.publish_stop_command()
                     return False, "No actuator state received.", False
 
@@ -295,11 +168,7 @@ class SoilSamplerNode(Node):
                 continue
 
             feedback.current_depth = position
-            feedback.current_force = (
-                self.latest_force
-                if self.latest_force is not None
-                else 0.0
-            )
+            feedback.current_force = self.latest_force if self.latest_force is not None else 0.0
             feedback.current_state = self.state_machine.state.name
 
             goal_handle.publish_feedback(feedback)
@@ -310,30 +179,17 @@ class SoilSamplerNode(Node):
                 target_reached = position <= target_position
 
             if target_reached:
-                self.get_logger().info(
-                    f"Target position reached: "
-                    f"{position:.2f} m"
-                )
-
+                self.get_logger().info(f"Target position reached: " f"{position:.2f} m")
                 self.publish_stop_command()
-
                 return True, "", False
 
             if time.monotonic() - start_time > timeout:
                 self.publish_stop_command()
-
-                return (
-                    False,
-                    "Actuator movement timed out.",
-                    False,
-                )
+                return False, "Actuator movement timed out.", False
 
             time.sleep(0.05)
 
-    def execute_sample(
-        self,
-        goal_handle,
-    ) -> TakeSoilSample.Result:
+    def execute_sample(self, goal_handle) -> TakeSoilSample.Result:
         request = goal_handle.request
 
         result = TakeSoilSample.Result()
@@ -342,14 +198,10 @@ class SoilSamplerNode(Node):
         if self.sampling_active:
             goal_handle.abort()
             result.success = False
-            result.message = (
-                "Another sampling operation is already active."
-            )
+            result.message = "Another sampling operation is already active."
             return result
 
-        valid, reason = self.state_machine.validate_target_depth(
-            float(request.target_depth)
-        )
+        valid, reason = self.state_machine.validate_target_depth(float(request.target_depth))
 
         if not valid:
             goal_handle.abort()
@@ -373,51 +225,18 @@ class SoilSamplerNode(Node):
         try:
             target_depth = float(request.target_depth)
 
-            self.get_logger().info(
-                f"Starting soil sampling at "
-                f"{target_depth:.1f} m."
-            )
+            self.get_logger().info(f"Starting soil sampling at " f"{target_depth:.1f} m.")
 
             while True:
                 self.state_machine.start_insertion()
-
                 attempt = self.state_machine.retry_count()
-
-                self.get_logger().info(
-                    f"Starting insertion attempt "
-                    f"{attempt}/{self.maximum_attempts}."
-                )
-
-                feedback.current_state = (
-                    SamplerState.INSERTING.name
-                )
-
-                feedback.current_depth = (
-                    self.actuator_position() or 0.0
-                )
-
-                feedback.current_force = (
-                    self.latest_force
-                    if self.latest_force is not None
-                    else 0.0
-                )
-
+                self.get_logger().info(f"Starting insertion attempt " f"{attempt}/{self.maximum_attempts}.")
+                feedback.current_state = SamplerState.INSERTING.name
+                feedback.current_depth = self.actuator_position() or 0.0
+                feedback.current_force = self.latest_force if self.latest_force is not None else 0.0
                 goal_handle.publish_feedback(feedback)
-
                 self.publish_extend_command()
-
-                (
-                    success,
-                    reason,
-                    rock_detected,
-                ) = self.wait_for_position(
-                    target_position=target_depth,
-                    direction=1,
-                    timeout=self.insertion_timeout,
-                    goal_handle=goal_handle,
-                    feedback=feedback,
-                    detect_rock=True,
-                )
+                success, reason, rock_detected = self.wait_for_position(target_position=target_depth, direction=1, timeout=self.insertion_timeout, goal_handle=goal_handle, feedback=feedback, detect_rock=True)
 
                 if success:
                     break
@@ -439,57 +258,21 @@ class SoilSamplerNode(Node):
                     return result
 
                 if not self.state_machine.can_retry():
-                    self.get_logger().error(
-                        "Maximum insertion attempts reached."
-                    )
-
+                    self.get_logger().error("Maximum insertion attempts reached.")
                     goal_handle.abort()
-
                     result.success = False
-                    result.message = (
-                        f"Rock detected and maximum insertion "
-                        f"attempts of {self.maximum_attempts} "
-                        f"reached."
-                    )
-
+                    result.message = f"Rock detected and maximum insertion " f"attempts of {self.maximum_attempts} " f"reached."
                     return result
 
                 self.state_machine.start_retraction()
-
-                feedback.current_state = (
-                    SamplerState.RETRACTING.name
-                )
-
-                feedback.current_depth = (
-                    self.actuator_position() or 0.0
-                )
-
-                feedback.current_force = (
-                    self.latest_force
-                    if self.latest_force is not None
-                    else 0.0
-                )
-
+                feedback.current_state = SamplerState.RETRACTING.name
+                feedback.current_depth = self.actuator_position() or 0.0
+                feedback.current_force = self.latest_force if self.latest_force is not None else 0.0
                 goal_handle.publish_feedback(feedback)
-
-                self.get_logger().info(
-                    "Retracting after rock detection."
-                )
-
+                self.get_logger().info("Retracting after rock detection.")
                 self.publish_retract_command()
 
-                (
-                    success,
-                    reason,
-                    _,
-                ) = self.wait_for_position(
-                    target_position=0.0,
-                    direction=-1,
-                    timeout=self.retraction_timeout,
-                    goal_handle=goal_handle,
-                    feedback=feedback,
-                    detect_rock=False,
-                )
+                success, reason, _ = self.wait_for_position(target_position=0.0, direction=-1, timeout=self.retraction_timeout, goal_handle=goal_handle, feedback=feedback, detect_rock=False)
 
                 if not success:
                     if goal_handle.is_cancel_requested:
@@ -503,73 +286,32 @@ class SoilSamplerNode(Node):
                     return result
 
                 self.state_machine.start_repositioning()
-
-                feedback.current_state = (
-                    SamplerState.REPOSITIONING.name
-                )
-
-                feedback.current_depth = (
-                    self.actuator_position() or 0.0
-                )
-
-                feedback.current_force = (
-                    self.latest_force
-                    if self.latest_force is not None
-                    else 0.0
-                )
-
+                feedback.current_state = SamplerState.REPOSITIONING.name
+                feedback.current_depth = self.actuator_position() or 0.0
+                feedback.current_force = self.latest_force if self.latest_force is not None else 0.0
                 goal_handle.publish_feedback(feedback)
-
-                self.get_logger().info(
-                    f"Repositioning placeholder complete. "
-                    f"Would move approximately "
-                    f"{self.reposition_distance:.1f} m "
-                    f"before the next attempt."
-                )
-
+                self.get_logger().info(f"Repositioning placeholder complete. " f"Would move approximately " f"{self.reposition_distance:.1f} m " f"before the next attempt.")
                 time.sleep(1.0)
 
             self.state_machine.start_dwell()
-
-            feedback.current_state = (
-                SamplerState.DWELLING.name
-            )
-
+            feedback.current_state = SamplerState.DWELLING.name
             feedback.current_depth = target_depth
-
-            feedback.current_force = (
-                self.latest_force
-                if self.latest_force is not None
-                else 0.0
-            )
-
+            feedback.current_force = self.latest_force if self.latest_force is not None else 0.0
             goal_handle.publish_feedback(feedback)
-
-            self.get_logger().info(
-                f"Starting measurement dwell for "
-                f"{request.dwell_time:.2f} s."
-            )
-
+            self.get_logger().info(f"Starting measurement dwell for " f"{request.dwell_time:.2f} s.")
             dwell_start = time.monotonic()
 
-            while (
-                time.monotonic() - dwell_start
-                < request.dwell_time
-            ):
+            while time.monotonic() - dwell_start < request.dwell_time:
                 if goal_handle.is_cancel_requested:
                     self.publish_stop_command()
                     goal_handle.canceled()
 
                     result.success = False
-                    result.message = (
-                        "Sampling action cancelled."
-                    )
+                    result.message = "Sampling action cancelled."
 
                     return result
 
-                safe, reason = (
-                    self.state_machine.safety_check()
-                )
+                safe, reason = self.state_machine.safety_check()
 
                 if not safe:
                     self.publish_stop_command()
@@ -581,88 +323,44 @@ class SoilSamplerNode(Node):
                     return result
 
                 if self.latest_vwc is not None:
-                    vwc_samples.append(
-                        self.latest_vwc
-                    )
+                    vwc_samples.append(self.latest_vwc)
 
                 if self.latest_temperature is not None:
-                    temperature_samples.append(
-                        self.latest_temperature
-                    )
+                    temperature_samples.append(self.latest_temperature)
 
                 if self.latest_ec is not None:
-                    ec_samples.append(
-                        self.latest_ec
-                    )
+                    ec_samples.append(self.latest_ec)
 
-                feedback.current_state = (
-                    SamplerState.DWELLING.name
-                )
-
-                feedback.current_depth = (
-                    self.actuator_position() or 0.0
-                )
-
-                feedback.current_force = (
-                    self.latest_force
-                    if self.latest_force is not None
-                    else 0.0
-                )
-
+                feedback.current_state = SamplerState.DWELLING.name
+                feedback.current_depth = self.actuator_position() or 0.0
+                feedback.current_force = self.latest_force if self.latest_force is not None else 0.0
                 goal_handle.publish_feedback(feedback)
-
                 time.sleep(0.05)
 
             if not vwc_samples:
-                raise RuntimeError(
-                    "No VWC measurements received during dwell."
-                )
+                raise RuntimeError("No VWC measurements received during dwell.")
 
             if not temperature_samples:
-                raise RuntimeError(
-                    "No temperature measurements received "
-                    "during dwell."
-                )
+                raise RuntimeError("No temperature measurements received " "during dwell.")
 
             if not ec_samples:
-                raise RuntimeError(
-                    "No EC measurements received during dwell."
-                )
+                raise RuntimeError("No EC measurements received during dwell.")
 
-            vwc_statistics = calculate_statistics(
-                vwc_samples
-            )
+            vwc_statistics = calculate_statistics(vwc_samples)
 
-            temperature_statistics = calculate_statistics(
-                temperature_samples
-            )
+            temperature_statistics = calculate_statistics(temperature_samples)
 
-            ec_statistics = calculate_statistics(
-                ec_samples
-            )
+            ec_statistics = calculate_statistics(ec_samples)
 
             self.state_machine.start_retraction()
 
-            feedback.current_state = (
-                SamplerState.RETRACTING.name
-            )
+            feedback.current_state = SamplerState.RETRACTING.name
 
             goal_handle.publish_feedback(feedback)
 
             self.publish_retract_command()
 
-            (
-                success,
-                reason,
-                _,
-            ) = self.wait_for_position(
-                target_position=0.0,
-                direction=-1,
-                timeout=self.retraction_timeout,
-                goal_handle=goal_handle,
-                feedback=feedback,
-                detect_rock=False,
-            )
+            success, reason, _ = self.wait_for_position(target_position=0.0, direction=-1, timeout=self.retraction_timeout, goal_handle=goal_handle, feedback=feedback, detect_rock=False)
 
             if not success:
                 if goal_handle.is_cancel_requested:
@@ -679,41 +377,17 @@ class SoilSamplerNode(Node):
 
             result.vwc = vwc_statistics.mean
             result.vwc_stddev = vwc_statistics.stddev
-
-            result.temperature = (
-                temperature_statistics.mean
-            )
-
-            result.temperature_stddev = (
-                temperature_statistics.stddev
-            )
-
+            result.temperature = temperature_statistics.mean
+            result.temperature_stddev = temperature_statistics.stddev
             result.ec = ec_statistics.mean
             result.ec_stddev = ec_statistics.stddev
-
             result.success = True
 
-            result.message = (
-                f"Sampling completed using "
-                f"{len(vwc_samples)} measurements."
-            )
-
-            feedback.current_state = (
-                SamplerState.COMPLETE.name
-            )
-
-            feedback.current_depth = (
-                self.actuator_position() or 0.0
-            )
-
-            feedback.current_force = (
-                self.latest_force
-                if self.latest_force is not None
-                else 0.0
-            )
-
+            result.message = f"Sampling completed using " f"{len(vwc_samples)} measurements."
+            feedback.current_state = SamplerState.COMPLETE.name
+            feedback.current_depth = self.actuator_position() or 0.0
+            feedback.current_force = self.latest_force if self.latest_force is not None else 0.0
             goal_handle.publish_feedback(feedback)
-
             goal_handle.succeed()
 
             self.get_logger().info(
@@ -729,9 +403,7 @@ class SoilSamplerNode(Node):
             return result
 
         except Exception as exc:
-            self.get_logger().error(
-                f"Soil sampling failed: {exc}"
-            )
+            self.get_logger().error(f"Soil sampling failed: {exc}")
 
             self.publish_stop_command()
             self.state_machine.error()

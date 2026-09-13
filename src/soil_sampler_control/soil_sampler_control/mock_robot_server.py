@@ -12,16 +12,9 @@ class MockRobotServer(Node):
     def __init__(self) -> None:
         super().__init__("mock_robot")
 
-        self.action_server = ActionServer(
-            self,
-            MoveRelative,
-            "move_relative",
-            self.execute_callback,
-        )
+        self.action_server = ActionServer(self, MoveRelative, "move_relative", self.execute_callback)
 
-        self.get_logger().info(
-            "Mock robot repositioning server started."
-        )
+        self.get_logger().info("Mock robot repositioning server started.")
 
     def execute_callback(self, goal_handle):
         request = goal_handle.request
@@ -29,23 +22,11 @@ class MockRobotServer(Node):
         direction = request.direction
         distance = float(request.distance)
 
-        direction_name = (
-            "FORWARD"
-            if direction == MoveRelative.Goal.FORWARD
-            else "BACKWARD"
-            if direction == MoveRelative.Goal.BACKWARD
-            else "UNKNOWN"
-        )
+        direction_name = "FORWARD" if direction == MoveRelative.Goal.FORWARD else "BACKWARD" if direction == MoveRelative.Goal.BACKWARD else "UNKNOWN"
 
-        self.get_logger().info(
-            f"Received reposition request: "
-            f"{direction_name}, {distance:.3f} m"
-        )
+        self.get_logger().info(f"Received reposition request: " f"{direction_name}, {distance:.3f} m")
 
-        if direction not in (
-            MoveRelative.Goal.FORWARD,
-            MoveRelative.Goal.BACKWARD,
-        ):
+        if direction not in (MoveRelative.Goal.FORWARD, MoveRelative.Goal.BACKWARD):
             goal_handle.abort()
 
             result = MoveRelative.Result()
@@ -78,14 +59,9 @@ class MockRobotServer(Node):
 
                 return result
 
-            remaining = distance - (
-                step_distance * (step + 1)
-            )
+            remaining = distance - (step_distance * (step + 1))
 
-            feedback.distance_remaining = max(
-                0.0,
-                remaining,
-            )
+            feedback.distance_remaining = max(0.0, remaining)
 
             goal_handle.publish_feedback(feedback)
 
@@ -95,14 +71,9 @@ class MockRobotServer(Node):
 
         result = MoveRelative.Result()
         result.success = True
-        result.message = (
-            f"Mock robot moved {distance:.3f} m "
-            f"{direction_name.lower()}."
-        )
+        result.message = f"Mock robot moved {distance:.3f} m " f"{direction_name.lower()}."
 
-        self.get_logger().info(
-            f"Repositioning complete: {result.message}"
-        )
+        self.get_logger().info(f"Repositioning complete: {result.message}")
 
         return result
 
