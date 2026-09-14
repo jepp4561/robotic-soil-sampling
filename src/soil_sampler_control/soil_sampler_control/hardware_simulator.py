@@ -5,7 +5,7 @@ import random
 import rclpy
 from rclpy.node import Node
 from sensor_msgs.msg import JointState
-from std_msgs.msg import Bool, Float32, Float64MultiArray
+from std_msgs.msg import Bool, Int32, UInt32, Float32, Float64MultiArray
 from sensor_msgs.msg import Temperature
 from soil_sampler_interfaces.msg import ActuatorCommand, ActuatorState
 
@@ -48,7 +48,19 @@ class SimulatedSoilSamplerPico(Node):
 
         self.vwc_pub = self.create_publisher(Float32, "teros12/volumetric_water_content", 10)
         self.ec_pub = self.create_publisher(Float32, "teros12/electrical_conductivity", 10)
-        self.temperature_pub = self.create_publisher(Temperature, "teros12/temperature", 10)
+        self.soil_temperature_pub = self.create_publisher(Temperature, "teros12/temperature", 10)
+
+        self.wind_speed_pub = self.create_publisher(Float32, "sen0658/wind_speed", 10)
+        self.wind_direction_gear_pub = self.create_publisher(Int32, "sen0658/wind_direction_gear", 10)
+        self.wind_direction_pub = self.create_publisher(Float32, "sen0658/wind_direction", 10)
+        self.humidity_pub = self.create_publisher(Float32, "sen0658/humidity", 10)
+        self.air_temperature_pub = self.create_publisher(Float32, "sen0658/temperature", 10)
+        self.noise_pub = self.create_publisher(Float32, "sen0658/noise", 10)
+        self.pm2_5_pub = self.create_publisher(Float32, "sen0658/pm2_5", 10)
+        self.pm10_pub = self.create_publisher(Float32, "sen0658/pm10", 10)
+        self.pressure_pub = self.create_publisher(Float32, "sen0658/pressure", 10)
+        self.illumination_pub = self.create_publisher(UInt32, "sen0658/illumination", 10)
+        self.rainfall_pub = self.create_publisher(Float32, "sen0658/rainfall", 10)
 
         self.joint_state_sub = self.create_subscription(JointState, "joint_states", self.joint_state_callback, 10)
         self.velocity_command_pub = self.create_publisher(Float64MultiArray, "velocity_command", 10)
@@ -144,7 +156,42 @@ class SimulatedSoilSamplerPico(Node):
         temperature_msg.header.stamp = self.get_clock().now().to_msg()
         temperature_msg.header.frame_id = "virtual_soil_sensor"
         temperature_msg.temperature = random.gauss(20.0, 5.0)
-        self.temperature_pub.publish(temperature_msg)
+        self.soil_temperature_pub.publish(temperature_msg)
+
+        wind_speed_msg = Float32()
+        wind_speed_msg.data = random.gauss(5.0, 2.0)
+        self.wind_speed_pub.publish(wind_speed_msg)
+        wind_direction_gear_msg = Int32()
+        wind_direction_gear_msg.data = round(random.gauss(5.0, 2.0))
+        self.wind_direction_gear_pub.publish(wind_direction_gear_msg)
+        wind_direction_msg = Float32()
+        wind_direction_msg.data = random.gauss(5.0, 2.0)
+        self.wind_direction_pub.publish(wind_direction_msg)
+        humidity_msg = Float32()
+        humidity_msg.data = random.gauss(5.0, 2.0)
+        self.humidity_pub.publish(humidity_msg)
+        temperature_msg = Float32()
+        temperature_msg.data = random.gauss(5.0, 2.0)
+        self.air_temperature_pub.publish(temperature_msg)
+        noise_msg = Float32()
+        noise_msg.data = random.gauss(5.0, 2.0)
+        self.noise_pub.publish(noise_msg)
+        pm2_5_msg = Float32()
+        pm2_5_msg.data = random.gauss(5.0, 2.0)
+        self.pm2_5_pub.publish(pm2_5_msg)
+        pm10_msg = Float32()
+        pm10_msg.data = random.gauss(5.0, 2.0)
+        self.pm10_pub.publish(pm10_msg)
+        pressure_msg = Float32()
+        pressure_msg.data = random.gauss(5.0, 2.0)
+        self.pressure_pub.publish(pressure_msg)
+        illumination_msg = UInt32()
+        illumination_msg.data = max(0, round(random.gauss(5.0, 2.0)))
+        self.illumination_pub.publish(illumination_msg)
+        rainfall_msg = Float32()
+        rainfall_msg.data = random.gauss(5.0, 2.0)
+        self.rainfall_pub.publish(rainfall_msg)
+
 
     def destroy_node(self):
         self._publish_velocity(0.0)

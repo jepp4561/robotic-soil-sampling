@@ -45,13 +45,13 @@ class SoilSamplerNode(Node):
 
         self.callback_group = ReentrantCallbackGroup()
         self.robot_move_client = ActionClient(self, MoveRelative, "/robot/move_relative", callback_group=self.callback_group)
+        self.action_server = ActionServer(self, TakeSoilSample, "take_sample", self.execute_sample, callback_group=self.callback_group)
         self.actuator_command_publisher = self.create_publisher(ActuatorCommand, "actuator_command", 10)
         self.actuator_state_subscription = self.create_subscription(ActuatorState, "actuator_state", self.actuator_state_callback, 10, callback_group=self.callback_group)
         self.force_subscription = self.create_subscription(Float32, "load_cell_reading", self.force_callback, 10, callback_group=self.callback_group)
         self.vwc_subscription = self.create_subscription(Float32, "teros12/volumetric_water_content", self.vwc_callback, 10, callback_group=self.callback_group)
         self.temperature_subscription = self.create_subscription(Temperature, "teros12/temperature", self.temperature_callback, 10, callback_group=self.callback_group)
         self.ec_subscription = self.create_subscription(Float32, "teros12/electrical_conductivity", self.ec_callback, 10, callback_group=self.callback_group)
-        self.action_server = ActionServer(self, TakeSoilSample, "take_sample", self.execute_sample, callback_group=self.callback_group)
 
         self.current_actuator_state: ActuatorState | None = None
         self.latest_force: float | None = None
@@ -347,15 +347,11 @@ class SoilSamplerNode(Node):
                 raise RuntimeError("No EC measurements received during dwell.")
 
             vwc_statistics = calculate_statistics(vwc_samples)
-
             temperature_statistics = calculate_statistics(temperature_samples)
-
             ec_statistics = calculate_statistics(ec_samples)
 
             self.state_machine.start_retraction()
-
             feedback.current_state = SamplerState.RETRACTING.name
-
             goal_handle.publish_feedback(feedback)
 
             self.publish_retract_command()
