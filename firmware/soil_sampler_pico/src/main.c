@@ -8,10 +8,8 @@
 
 #include <rmw_microros/rmw_microros.h>
 
-#include <std_msgs/msg/float32.h>
-#include <std_msgs/msg/int32.h>
-#include <std_msgs/msg/int8.h>
 #include <std_msgs/msg/bool.h>
+#include <std_msgs/msg/float32.h>
 
 #include <soil_sampler_interfaces/msg/actuator_command.h>
 #include <soil_sampler_interfaces/msg/actuator_state.h>
@@ -35,23 +33,48 @@
 
 #define ACTUATOR_POSITION_PUBLISH_PERIOD_MS 100
 
+#define CALIBRATION_TIME_MS 10000
+
+#define HORIZONTAL_ACTUATOR_PWM_PIN 14
+#define HORIZONTAL_ACTUATOR_DIR_PIN 15
+#define HORIZONTAL_ACTUATOR_SLEEP_PIN 13
+#define HORIZONTAL_ACTUATOR_FAULT_PIN 12
+#define HORIZONTAL_ACTUATOR_HALL_PIN 11
+
+#define VERTICAL_ACTUATOR_PWM_PIN 16
+#define VERTICAL_ACTUATOR_DIR_PIN 17
+#define VERTICAL_ACTUATOR_SLEEP_PIN 18
+#define VERTICAL_ACTUATOR_FAULT_PIN 19
+#define VERTICAL_ACTUATOR_HALL_PIN 21
+
+static actuator_t horizontal_actuator;
+static actuator_t vertical_actuator;
+
 static rcl_publisher_t load_cell_publisher;
 static rcl_timer_t load_cell_timer;
 static std_msgs__msg__Float32 load_cell_message;
 
-static rcl_subscription_t actuator_command_subscription;
-static soil_sampler_interfaces__msg__ActuatorCommand actuator_command_message;
+static rcl_publisher_t horizontal_actuator_state_publisher;
+static rcl_subscription_t horizontal_actuator_command_subscription;
+static soil_sampler_interfaces__msg__ActuatorCommand horizontal_actuator_command_message;
+static soil_sampler_interfaces__msg__ActuatorState horizontal_actuator_state_message;
+
+static rcl_publisher_t vertical_actuator_state_publisher;
+static rcl_subscription_t vertical_actuator_command_subscription;
+static soil_sampler_interfaces__msg__ActuatorCommand vertical_actuator_command_message;
+static soil_sampler_interfaces__msg__ActuatorState vertical_actuator_state_message;
 
 static rcl_subscription_t calibration_subscription;
 static std_msgs__msg__Bool calibration_message;
 
-static rcl_publisher_t actuator_position_publisher;
 static rcl_timer_t actuator_position_timer;
-static soil_sampler_interfaces__msg__ActuatorState actuator_position_message;
 
 static void fatal_error(void) {
-    actuator_stop();
-    actuator_enable(false);
+    actuator_stop(&horizontal_actuator);
+    actuator_enable(&horizontal_actuator, false);
+
+    actuator_stop(&vertical_actuator);
+    actuator_enable(&vertical_actuator, false);
 
     while (true) {
         gpio_put(LED_PIN, 1);
@@ -61,15 +84,18 @@ static void fatal_error(void) {
     }
 }
 
-static void calibrate(void){
-    actuator_retract();
-    while(load_cell_read_newton() > -2){
-        load_cell_update();
-        sleep_ms(10);
-    }
-    actuator_stop();
-    sleep_ms(500);
-    actuator_hall_reset();
+static void calibrate(void) {
+    actuator_retract(&horizontal_actuator);
+    actuator_retract(&vertical_actuator);
+
+    sleep_ms(CALIBRATION_TIME_MS);
+
+    actuator_stop(&horizontal_actuator);
+    actuator_stop(&vertical_actuator);
+
+    actuator_hall_reset(&horizontal_actuator);
+    actuator_hall_reset(&vertical_actuator);
+
     load_cell_calibrate_bias(100);
 }
 
@@ -101,42 +127,63 @@ static void actuator_position_timer_callback(rcl_timer_t *timer, int64_t last_ca
         return;
     }
 
-    actuator_position_message.current_direction = actuator_get_direction();
-    actuator_position_message.position = actuator_get_position();
-    actuator_position_message.enabled = actuator_is_enabled();
-    actuator_position_message.fault = actuator_fault_active();
+    horizontal_actuator_state_message.current_direction = actuator_get_direction(&horizontal_actuator);
+    horizontal_actuator_state_message.position = actuator_get_position(&horizontal_actuator);
+    horizontal_actuator_state_message.enabled = actuator_is_enabled(&horizontal_actuator);
+    horizontal_actuator_state_message.fault = actuator_fault_active(&horizontal_actuator);
 
-    rcl_ret_t ret = rcl_publish(&actuator_position_publisher, &actuator_position_message, NULL);
+    rcl_ret_t ret = rcl_publish(&horizontal_actuator_state_publisher, &horizontal_actuator_state_message, NULL);
+
+    if (ret != RCL_RET_OK) {
+        fatal_error();
+    }
+
+    vertical_actuator_state_message.current_direction = actuator_get_direction(&vertical_actuator);
+    vertical_actuator_state_message.position = actuator_get_position(&vertical_actuator);
+    vertical_actuator_state_message.enabled = actuator_is_enabled(&vertical_actuator);
+    vertical_actuator_state_message.fault = actuator_fault_active(&vertical_actuator);
+
+    ret = rcl_publish(&vertical_actuator_state_publisher, &vertical_actuator_state_message, NULL);
 
     if (ret != RCL_RET_OK) {
         fatal_error();
     }
 }
 
-static void actuator_command_callback(const void *message) {
+static void horizontal_actuator_command_callback(const void *message) {
     const soil_sampler_interfaces__msg__ActuatorCommand *command = (const soil_sampler_interfaces__msg__ActuatorCommand *)message;
 
-    // if (actuator_fault_active()) {
-    //     actuator_stop();
-    //     return;
-    // }
-
-    gpio_put(LED_PIN, 1);
     if (command->direction == ACTUATOR_EXTEND) {
         gpio_put(LED_PIN, 1);
-        actuator_extend();
+        actuator_extend(&horizontal_actuator);
     } else if (command->direction == ACTUATOR_RETRACT) {
         gpio_put(LED_PIN, 1);
-        actuator_retract();
+        actuator_retract(&horizontal_actuator);
     } else {
         gpio_put(LED_PIN, 0);
-        actuator_stop();
+        actuator_stop(&horizontal_actuator);
+    }
+}
+
+static void vertical_actuator_command_callback(const void *message) {
+    const soil_sampler_interfaces__msg__ActuatorCommand *command = (const soil_sampler_interfaces__msg__ActuatorCommand *)message;
+
+    if (command->direction == ACTUATOR_EXTEND) {
+        gpio_put(LED_PIN, 1);
+        actuator_extend(&vertical_actuator);
+    } else if (command->direction == ACTUATOR_RETRACT) {
+        gpio_put(LED_PIN, 1);
+        actuator_retract(&vertical_actuator);
+    } else {
+        gpio_put(LED_PIN, 0);
+        actuator_stop(&vertical_actuator);
     }
 }
 
 static void calibration_callback(const void *message) {
     const std_msgs__msg__Bool *command = (const std_msgs__msg__Bool *)message;
-    if(command->data){
+
+    if (command->data) {
         calibrate();
     }
 }
@@ -152,11 +199,29 @@ int main(void) {
         fatal_error();
     }
 
-    if (!actuator_init()) {
+    if (!actuator_init(&horizontal_actuator,
+            HORIZONTAL_ACTUATOR_PWM_PIN,
+            HORIZONTAL_ACTUATOR_DIR_PIN,
+            HORIZONTAL_ACTUATOR_SLEEP_PIN,
+            HORIZONTAL_ACTUATOR_FAULT_PIN,
+            HORIZONTAL_ACTUATOR_HALL_PIN)) {
         fatal_error();
     }
 
+    if (!actuator_init(&vertical_actuator,
+            VERTICAL_ACTUATOR_PWM_PIN,
+            VERTICAL_ACTUATOR_DIR_PIN,
+            VERTICAL_ACTUATOR_SLEEP_PIN,
+            VERTICAL_ACTUATOR_FAULT_PIN,
+            VERTICAL_ACTUATOR_HALL_PIN)) {
+        fatal_error();
+    }
+
+    actuator_stop(&horizontal_actuator);
+    actuator_stop(&vertical_actuator);
+
     rcl_ret_t ret = rmw_uros_ping_agent(AGENT_PING_TIMEOUT_MS, AGENT_PING_ATTEMPTS);
+
     if (ret != RCL_RET_OK) {
         fatal_error();
     }
@@ -165,98 +230,124 @@ int main(void) {
     rclc_support_t support;
 
     ret = rclc_support_init(&support, 0, NULL, &allocator);
+
     if (ret != RCL_RET_OK) {
         fatal_error();
     }
 
     rcl_node_t node;
     ret = rclc_node_init_default(&node, "soil_sampler_pico", "soil_sampler", &support);
+
     if (ret != RCL_RET_OK) {
         fatal_error();
     }
 
-    // Initialize publishers
     ret = rclc_publisher_init_default(&load_cell_publisher, &node, ROSIDL_GET_MSG_TYPE_SUPPORT(std_msgs, msg, Float32), "load_cell_reading");
+
     if (ret != RCL_RET_OK) {
         fatal_error();
     }
 
-    ret = rclc_publisher_init_default(&actuator_position_publisher, &node, ROSIDL_GET_MSG_TYPE_SUPPORT(soil_sampler_interfaces, msg, ActuatorState), "actuator_state");
+    ret = rclc_publisher_init_default(&horizontal_actuator_state_publisher, &node, ROSIDL_GET_MSG_TYPE_SUPPORT(soil_sampler_interfaces, msg, ActuatorState), "horizontal_actuator/state");
+
     if (ret != RCL_RET_OK) {
         fatal_error();
     }
 
-    // Initialize subscribers
-    ret = rclc_subscription_init_default(&actuator_command_subscription, &node, ROSIDL_GET_MSG_TYPE_SUPPORT(soil_sampler_interfaces, msg, ActuatorCommand), "actuator_command");
+    ret = rclc_publisher_init_default(&vertical_actuator_state_publisher, &node, ROSIDL_GET_MSG_TYPE_SUPPORT(soil_sampler_interfaces, msg, ActuatorState), "vertical_actuator/state");
+
+    if (ret != RCL_RET_OK) {
+        fatal_error();
+    }
+
+    ret = rclc_subscription_init_default(&horizontal_actuator_command_subscription, &node, ROSIDL_GET_MSG_TYPE_SUPPORT(soil_sampler_interfaces, msg, ActuatorCommand), "horizontal_actuator/command");
+
+    if (ret != RCL_RET_OK) {
+        fatal_error();
+    }
+
+    ret = rclc_subscription_init_default(&vertical_actuator_command_subscription, &node, ROSIDL_GET_MSG_TYPE_SUPPORT(soil_sampler_interfaces, msg, ActuatorCommand), "vertical_actuator/command");
+
     if (ret != RCL_RET_OK) {
         fatal_error();
     }
 
     ret = rclc_subscription_init_default(&calibration_subscription, &node, ROSIDL_GET_MSG_TYPE_SUPPORT(std_msgs, msg, Bool), "calibration_command");
+
     if (ret != RCL_RET_OK) {
         fatal_error();
     }
 
-    // Initialize timers
     ret = rclc_timer_init_default2(&load_cell_timer, &support, RCL_MS_TO_NS(LOAD_CELL_PUBLISH_PERIOD_MS), load_cell_timer_callback, true);
+
     if (ret != RCL_RET_OK) {
         fatal_error();
     }
 
     ret = rclc_timer_init_default2(&actuator_position_timer, &support, RCL_MS_TO_NS(ACTUATOR_POSITION_PUBLISH_PERIOD_MS), actuator_position_timer_callback, true);
+
     if (ret != RCL_RET_OK) {
         fatal_error();
     }
 
-    // Initialize executor
     rclc_executor_t executor;
-    ret = rclc_executor_init(&executor, &support.context, 4, &allocator);
+
+    ret = rclc_executor_init(&executor, &support.context, 5, &allocator);
+
     if (ret != RCL_RET_OK) {
         fatal_error();
     }
 
     ret = rclc_executor_add_timer(&executor, &load_cell_timer);
+
     if (ret != RCL_RET_OK) {
         fatal_error();
     }
 
     ret = rclc_executor_add_timer(&executor, &actuator_position_timer);
+
     if (ret != RCL_RET_OK) {
         fatal_error();
     }
 
-    ret = rclc_executor_add_subscription(&executor, &actuator_command_subscription, &actuator_command_message, &actuator_command_callback, ON_NEW_DATA);
+    ret = rclc_executor_add_subscription(&executor, &horizontal_actuator_command_subscription, &horizontal_actuator_command_message, &horizontal_actuator_command_callback, ON_NEW_DATA);
+
+    if (ret != RCL_RET_OK) {
+        fatal_error();
+    }
+
+    ret = rclc_executor_add_subscription(&executor, &vertical_actuator_command_subscription, &vertical_actuator_command_message, &vertical_actuator_command_callback, ON_NEW_DATA);
+
     if (ret != RCL_RET_OK) {
         fatal_error();
     }
 
     ret = rclc_executor_add_subscription(&executor, &calibration_subscription, &calibration_message, &calibration_callback, ON_NEW_DATA);
+
     if (ret != RCL_RET_OK) {
         fatal_error();
     }
 
     load_cell_message.data = 0;
-    actuator_position_message.current_direction = ACTUATOR_STOP;
-    actuator_position_message.position = 0;
-    actuator_position_message.enabled = false;
-    actuator_position_message.fault = false;
-    actuator_command_message.direction = ACTUATOR_STOP;
 
-    actuator_stop();
+    horizontal_actuator_state_message.current_direction = ACTUATOR_STOP;
+    horizontal_actuator_state_message.position = 0;
+    horizontal_actuator_state_message.enabled = false;
+    horizontal_actuator_state_message.fault = false;
+
+    vertical_actuator_state_message.current_direction = ACTUATOR_STOP;
+    vertical_actuator_state_message.position = 0;
+    vertical_actuator_state_message.enabled = false;
+    vertical_actuator_state_message.fault = false;
+
+    horizontal_actuator_command_message.direction = ACTUATOR_STOP;
+    vertical_actuator_command_message.direction = ACTUATOR_STOP;
 
     while (true) {
         ret = rclc_executor_spin_some(&executor, RCL_MS_TO_NS(10));
 
         if (ret != RCL_RET_OK) {
             fatal_error();
-        }
-
-        float max_force = 100.0;
-        if (load_cell_available()) {
-            float average = load_cell_read_newton();
-            if (average > max_force || average < -max_force) {
-                actuator_stop();
-            }
         }
     }
 

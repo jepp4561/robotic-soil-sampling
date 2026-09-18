@@ -9,25 +9,12 @@ from launch_ros.actions import Node
 
 
 def launch_setup(context, *args, **kwargs):
-    robot_namespace = LaunchConfiguration(
-        "robot_namespace"
-    ).perform(context)
+    robot_namespace = LaunchConfiguration("robot_namespace").perform(context)
+    controller_manager = LaunchConfiguration("controller_manager").perform(context)
+    tool_namespace = LaunchConfiguration("tool_namespace").perform(context)
 
-    controller_manager = LaunchConfiguration(
-        "controller_manager"
-    ).perform(context)
-
-    tool_namespace = LaunchConfiguration(
-        "tool_namespace"
-    ).perform(context)
-
-    velocity_controller_fqn = (
-        f"/{robot_namespace}/soil_sampler_velocity_controller"
-    )
-
-    joint_states_topic = (
-        f"/{robot_namespace}/platform/joint_states"
-    )
+    velocity_controller_fqn = f"/{robot_namespace}/soil_sampler_velocity_controller"
+    joint_states_topic = f"/{robot_namespace}/platform/joint_states"
 
     configure_script = f"""
     set -e
@@ -40,7 +27,7 @@ def launch_setup(context, *args, **kwargs):
       sleep 1
     done
 
-    until ros2 param set {velocity_controller_fqn} joints "[soil_sampler_horizontal_slider, soil_sampler_vertical_slider]" > /dev/null 2>&1; do
+    until ros2 param set {velocity_controller_fqn} joints "[soil_sampler_slider_1]" > /dev/null 2>&1; do
       sleep 1
     done
 
@@ -65,29 +52,19 @@ def launch_setup(context, *args, **kwargs):
         name="hardware_simulator",
         parameters=[
             {
-                "horizontal_joint_name": "soil_sampler_horizontal_slider",
-                "vertical_joint_name": "soil_sampler_vertical_slider",
-                "horizontal_lower_limit": 0.0,
-                "horizontal_upper_limit": 0.3,
-                "vertical_lower_limit": 0.0,
-                "vertical_upper_limit": 0.3,
-                "horizontal_velocity": 0.01,
-                "vertical_velocity": 0.01,
+                "joint_name": "soil_sampler_slider_1",
+                "lower_limit": 0.0,
+                "upper_limit": 0.25,
+                "velocity": 0.01,
             }
         ],
         remappings=[
             ("joint_states", joint_states_topic),
-            (
-                "velocity_command",
-                f"{velocity_controller_fqn}/commands",
-            ),
+            ("velocity_command", f"{velocity_controller_fqn}/commands"),
         ],
     )
 
-    return [
-        configure_soil_sampler_controller,
-        hardware_simulator,
-    ]
+    return [configure_soil_sampler_controller, hardware_simulator]
 
 
 def generate_launch_description():
@@ -118,6 +95,7 @@ def generate_launch_description():
         declare_controller_manager,
         declare_tool_namespace,
         OpaqueFunction(function=launch_setup),
+
         Node(
             package="soil_sampler_control",
             executable="soil_sampler_node",

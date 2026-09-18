@@ -1,0 +1,9 @@
+<?xml version="1.0"?>
+
+<robot xmlns:xacro="http://www.ros.org/wiki/xacro" name="soil_sampler">
+
+<xacro:include filename="$(find soil_sampler_description)/urdf/soil_sampler_macro.urdf.xacro"/>
+
+<xacro:soil_sampler/>
+
+</robot>

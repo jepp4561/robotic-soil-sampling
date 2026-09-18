@@ -2,46 +2,66 @@
 
 <robot xmlns:xacro="http://www.ros.org/wiki/xacro">
 
-<xacro:macro name="soil_sampler" params=" parent_link:='' mount_xyz:='0 0 0' mount_rpy:='0 0 0' ">
+<xacro:macro name="soil_sampler" params="parent_link:='' mount_xyz:='0 0 0' mount_rpy:='0 0 0'">
 
 <link name="soil_sampler_root"/>
 
-<link name="soil_sampler_frame">
+<link name="soil_sampler_mounting_frame">
     <inertial>
-        <mass value="0.00461699"/>
-        <origin xyz="0 0 0" rpy="0 0 0"/>
-        <inertia ixx="0.000260854" ixy="0" ixz="0" iyy="0.000195882" iyz="1.5257e-05" izz="0.000154911"/>
+        <mass value="0.00517223"/>
+        <origin xyz="0.0344638 0.0275545 0.0902452" rpy="0 0 0"/>
+        <inertia ixx="0.000144298" ixy="1.56901e-05" ixz="-6.22233e-06" iyy="0.000168833" iyz="2.84807e-05" izz="0.000232011"/>
     </inertial>
 
     <visual>
-        <origin xyz="0 0 0" rpy="0 0 0"/>
+        <origin xyz="-0.000150838 -0.0200827 0" rpy="0 0 0"/>
         <geometry>
             <mesh
-                filename="package://soil_sampler_description/meshes/Frame.stl"
+                filename="package://soil_sampler_description/meshes/Mounting_frame.stl"
                 scale="1 1 1"/>
         </geometry>
-        <material name="frame_material">
-            <color rgba="0.615686 0.811765 0.929412 1"/>
+        <material name="mounting_frame_material">
+            <color rgba="0.972549 0.529412 0.00392157 1"/>
         </material>
     </visual>
 </link>
 
-<link name="soil_sampler_piston">
+<link name="soil_sampler_probe">
     <inertial>
-        <mass value="0.000682764"/>
-        <origin xyz="0 0 0" rpy="0 0 0"/>
-        <inertia ixx="8.33755e-06" ixy="0" ixz="0" iyy="8.95209e-06" iyz="0" izz="7.28735e-07"/>
+        <mass value="0.000573648"/>
+        <origin xyz="-7.56371e-18 2.77556e-17 -0.27631" rpy="0 0 0"/>
+        <inertia ixx="7.30952e-06" ixy="0" ixz="0" iyy="7.71494e-06" iyz="0" izz="4.83282e-07"/>
     </inertial>
 
     <visual>
-        <origin xyz="0 0 0" rpy="0 0 0"/>
+        <origin xyz="-1.57166e-17 0.08 -0.455" rpy="0 0 0"/>
         <geometry>
             <mesh
-                filename="package://soil_sampler_description/meshes/Piston.stl"
+                filename="package://soil_sampler_description/meshes/Probe.stl"
                 scale="1 1 1"/>
         </geometry>
-        <material name="piston_material">
-            <color rgba="0.498039 0.498039 0.498039 1"/>
+        <material name="probe_material">
+            <color rgba="0.972549 0.529412 0.00392157 1"/>
+        </material>
+    </visual>
+</link>
+
+<link name="soil_sampler_probe_frame">
+    <inertial>
+        <mass value="0.00314429"/>
+        <origin xyz="-0.292428 -0.0352669 0.0550974" rpy="0 0 0"/>
+        <inertia ixx="0.000120885" ixy="-8.39656e-07" ixz="1.31179e-06" iyy="0.000141582" iyz="8.19976e-07" izz="2.25236e-05"/>
+    </inertial>
+
+    <visual>
+        <origin xyz="-0.3 0.04 -0.125" rpy="0 0 0"/>
+        <geometry>
+            <mesh
+                filename="package://soil_sampler_description/meshes/Probe_frame.stl"
+                scale="1 1 1"/>
+        </geometry>
+        <material name="probe_frame_material">
+            <color rgba="0.615686 0.811765 0.929412 1"/>
         </material>
     </visual>
 </link>
@@ -54,18 +74,26 @@
     </joint>
 </xacro:if>
 
-<joint name="soil_sampler_hanging_node_to_root_joint" type="fixed">
-    <origin xyz="0 0 0" rpy="0 0 0"/>
+<joint name="soil_sampler_root_joint" type="fixed">
+    <origin xyz="0 0 0" rpy="0 0 1.5708"/>
     <parent link="soil_sampler_root"/>
-    <child link="soil_sampler_frame"/>
+    <child link="soil_sampler_mounting_frame"/>
 </joint>
 
-<joint name="soil_sampler_slider_1" type="prismatic">
-    <origin xyz="0 0 0" rpy="0 0 0"/>
+<joint name="soil_sampler_horizontal_slider" type="prismatic">
+    <origin xyz="0.299849 -0.0600827 0.125" rpy="0 0 0"/>
+    <axis xyz="-1 0 0"/>
+    <parent link="soil_sampler_mounting_frame"/>
+    <child link="soil_sampler_probe_frame"/>
+    <limit effort="1" velocity="1" lower="0" upper="0.3"/>
+</joint>
+
+<joint name="soil_sampler_vertical_slider" type="prismatic">
+    <origin xyz="-0.3 -0.04 0.33" rpy="0 0 0"/>
     <axis xyz="0 0 -1"/>
-    <parent link="soil_sampler_frame"/>
-    <child link="soil_sampler_piston"/>
-    <limit effort="3000" velocity="0.02" lower="-0.01" upper="0.3" acceleration="100" deceleration="100"/>
+    <parent link="soil_sampler_probe_frame"/>
+    <child link="soil_sampler_probe"/>
+    <limit effort="1" velocity="1" lower="0" upper="0.3"/>
 </joint>
 
 </xacro:macro>
