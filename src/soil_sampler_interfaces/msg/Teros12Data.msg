@@ -1,0 +1,8 @@
+float32 volumetric_water_content_mean
+float32 volumetric_water_content_stddev
+
+float32 temperature_mean
+float32 temperature_stddev
+
+float32 electrical_conductivity_mean
+float32 electrical_conductivity_stddev

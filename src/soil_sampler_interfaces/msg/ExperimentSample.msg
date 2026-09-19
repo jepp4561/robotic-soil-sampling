@@ -1,0 +1,5 @@
+builtin_interfaces/Time timestamp
+float64 x
+float64 y
+float64 heading
+soil_sampler_interfaces/SoilSample sample

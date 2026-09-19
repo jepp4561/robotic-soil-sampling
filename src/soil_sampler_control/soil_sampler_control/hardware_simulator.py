@@ -29,7 +29,7 @@ class SimulatedSoilSamplerPico(Node):
         self.declare_parameter("vertical_upper_limit", 0.3)
         self.declare_parameter("horizontal_velocity", 0.01)
         self.declare_parameter("vertical_velocity", 0.01)
-        self.declare_parameter("calibration_tolerance", 0.002)
+        self.declare_parameter("calibration_tolerance", 0.001)
         self.declare_parameter("state_publish_rate", 10.0)
 
         self.horizontal_joint_name = self.get_parameter("horizontal_joint_name").value
@@ -89,19 +89,11 @@ class SimulatedSoilSamplerPico(Node):
         self.joint_state_sub = self.create_subscription(JointState, "joint_states", self.joint_state_callback, 10)
         self.velocity_command_pub = self.create_publisher(Float64MultiArray, "velocity_command", 10)
 
-        self.timer = self.create_timer(
-            1.0 / state_publish_rate,
-            self.publish_state,
-        )
+        self.timer = self.create_timer(1.0 / state_publish_rate, self.publish_state)
 
-        self.get_logger().info(
-            "Simulated soil_sampler_pico started."
-        )
+        self.get_logger().info("Simulated soil_sampler_pico started.")
 
-    def horizontal_command_callback(
-        self,
-        msg: ActuatorCommand,
-    ):
+    def horizontal_command_callback(self, msg: ActuatorCommand):
         if self.calibrating:
             return
 
@@ -120,10 +112,7 @@ class SimulatedSoilSamplerPico(Node):
         else:
             self._stop_horizontal_actuator()
 
-    def vertical_command_callback(
-        self,
-        msg: ActuatorCommand,
-    ):
+    def vertical_command_callback(self, msg: ActuatorCommand):
         if self.calibrating:
             return
 
@@ -153,9 +142,7 @@ class SimulatedSoilSamplerPico(Node):
 
         self._publish_velocity()
 
-        self.get_logger().info(
-            "Calibration started: retracting actuators"
-        )
+        self.get_logger().info("Calibration started: retracting actuators")
 
     def _publish_velocity(self):
         horizontal_velocity = 0.0
@@ -172,10 +159,7 @@ class SimulatedSoilSamplerPico(Node):
             vertical_velocity = -self.vertical_velocity
 
         msg = Float64MultiArray()
-        msg.data = [
-            horizontal_velocity,
-            vertical_velocity,
-        ]
+        msg.data = [horizontal_velocity, vertical_velocity]
 
         self.velocity_command_pub.publish(msg)
 
@@ -205,21 +189,13 @@ class SimulatedSoilSamplerPico(Node):
         return self.vertical_position >= self.vertical_upper_limit - self.calibration_tolerance
 
     def joint_state_callback(self, msg: JointState):
-        horizontal_found = (
-            self.horizontal_joint_name in msg.name
-        )
+        horizontal_found = self.horizontal_joint_name in msg.name
 
-        vertical_found = (
-            self.vertical_joint_name in msg.name
-        )
+        vertical_found = self.vertical_joint_name in msg.name
 
         if not horizontal_found:
             if not self._warned_missing_horizontal_joint:
-                self.get_logger().warn(
-                    f"Joint '{self.horizontal_joint_name}' "
-                    f"not found in incoming JointState "
-                    f"(names: {list(msg.name)})."
-                )
+                self.get_logger().warn(f"Joint '{self.horizontal_joint_name}' not found in incoming JointState (names: {list(msg.name)}).")
                 self._warned_missing_horizontal_joint = True
         else:
             idx = msg.name.index(self.horizontal_joint_name)
@@ -228,11 +204,7 @@ class SimulatedSoilSamplerPico(Node):
 
         if not vertical_found:
             if not self._warned_missing_vertical_joint:
-                self.get_logger().warn(
-                    f"Joint '{self.vertical_joint_name}' "
-                    f"not found in incoming JointState "
-                    f"(names: {list(msg.name)})."
-                )
+                self.get_logger().warn(f"Joint '{self.vertical_joint_name}' not found in incoming JointState (names: {list(msg.name)}).")
                 self._warned_missing_vertical_joint = True
         else:
             idx = msg.name.index(self.vertical_joint_name)
@@ -260,15 +232,10 @@ class SimulatedSoilSamplerPico(Node):
                 self.vertical_direction = STOP
 
         if self.calibrating:
-            if (
-                self._horizontal_at_lower_limit()
-                and self._vertical_at_lower_limit()
-            ):
+            if self._horizontal_at_lower_limit() and self._vertical_at_lower_limit():
                 self.calibrating = False
                 self._stop_all_actuators()
-                self.get_logger().info(
-                    "Calibration complete"
-                )
+                self.get_logger().info("Calibration complete")
 
     def publish_state(self):
         horizontal_state = ActuatorState()

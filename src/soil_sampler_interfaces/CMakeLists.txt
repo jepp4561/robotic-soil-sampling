@@ -7,10 +7,15 @@ find_package(rosidl_default_generators REQUIRED)
 
 rosidl_generate_interfaces(${PROJECT_NAME}
   "action/TakeSoilSample.action"
-  "action/MoveRelative.action"
+  "action/RunExperiment.action"
+  # "action/MoveRelative.action"
   "msg/ActuatorCommand.msg"
   "msg/ActuatorState.msg"
-  "srv/SetSafeguards.srv"
+  "msg/Sen0658Data.msg"
+  "msg/Teros12Data.msg"
+  "msg/SoilSample.msg"
+  "msg/ExperimentSample.msg"
+  # "srv/SetSafeguards.srv"
 )
 
 ament_package()

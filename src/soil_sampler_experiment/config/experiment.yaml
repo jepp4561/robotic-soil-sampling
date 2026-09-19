@@ -1,0 +1,11 @@
+soil_sampler_experiment:
+  ros__parameters:
+    robot_namespace: husky
+    sampler_action: /soil_sampler/take_sample
+    horizontal_sample_offset_x: 0.0
+    horizontal_sample_offset_y: -0.25
+    odom_timeout: 5.0
+    movement_timeout: 120.0
+    position_tolerance: 0.02
+    stop_duration: 0.5
+    measurement_server_timeout: 5.0
