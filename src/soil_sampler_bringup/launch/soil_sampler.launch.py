@@ -14,6 +14,17 @@ def generate_launch_description():
         "soil_sampler.yaml",
     )
 
+    soil_sampler_experiment_path = os.path.join(
+        get_package_share_directory("soil_sampler_experiment"),
+        "launch",
+        "experiment.launch.py",
+    )
+
+    soil_sampler_experiment_launch = ExecuteProcess(
+        cmd=["ros2", "launch", soil_sampler_experiment_path],
+        output="screen",
+    )
+
     pico_port = "/dev/serial/by-id/usb-Raspberry_Pi_Pico_E6612483CB5D9E2B-if00"
 
     return LaunchDescription(
@@ -48,13 +59,8 @@ def generate_launch_description():
                 output="screen",
                 parameters=[config_file],
             ),
-
-            Node(
-                package="soil_sampler_control",
-                executable="move_relative_mock_server",
-                name="move_relative_mock_server",
-                namespace="soil_sampler",
-                output="screen",
-            ),
+            
+            soil_sampler_experiment_launch,
+            
         ]
     )

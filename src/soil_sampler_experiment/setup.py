@@ -34,6 +34,7 @@ setup(
         "console_scripts": [
             "experiment_node = soil_sampler_experiment.experiment_node:main",
             "experiment_visualization = soil_sampler_experiment.experiment_visualization:main",
+            "experiment_dashboard = soil_sampler_experiment.experiment_dashboard:main",
         ],
     },
 )

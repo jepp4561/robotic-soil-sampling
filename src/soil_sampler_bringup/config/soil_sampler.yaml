@@ -8,10 +8,10 @@
 
 /soil_sampler/soil_sampler:
   ros__parameters:
-    maximum_depth: 0.2
+    maximum_depth: 0.3
     maximum_force: 30.0
 
-    insertion_timeout: 30.0
-    retraction_timeout: 30.0
+    insertion_timeout: 60.0
+    retraction_timeout: 60.0
 
     position_tolerance: 2.0

@@ -33,8 +33,8 @@ class SoilSamplerNode(Node):
     def __init__(self) -> None:
         super().__init__("soil_sampler")
 
-        self.declare_parameter("maximum_depth", 0.2)
-        self.declare_parameter("maximum_horizontal_distance", 0.025)
+        self.declare_parameter("maximum_depth", 0.3)
+        self.declare_parameter("maximum_horizontal_distance", 0.25)
         self.declare_parameter("maximum_force", 50.0)
         self.declare_parameter("insertion_timeout", 60.0)
         self.declare_parameter("retraction_timeout", 60.0)
