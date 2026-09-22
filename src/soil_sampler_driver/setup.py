@@ -31,6 +31,7 @@ setup(
     entry_points={
         "console_scripts": [
             "teros12_node = soil_sampler_driver.teros12_node:main",
+            "sen0658_node = soil_sampler_driver.sen0658_node:main",
         ],
     },
 )

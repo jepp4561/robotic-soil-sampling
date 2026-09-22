@@ -52,6 +52,15 @@ def generate_launch_description():
             ),
 
             Node(
+                package="soil_sampler_driver",
+                executable="sen0658_node",
+                name="sen0658",
+                namespace="soil_sampler",
+                output="screen",
+                parameters=[config_file],
+            ),
+
+            Node(
                 package="soil_sampler_control",
                 executable="soil_sampler_node",
                 name="soil_sampler",

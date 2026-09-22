@@ -23,5 +23,5 @@ float32 pm10_stddev
 float32 pressure_mean
 float32 pressure_stddev
 
-uint32 illumination
+uint32 illuminance
 float32 rainfall

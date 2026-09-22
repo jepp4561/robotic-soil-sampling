@@ -6,10 +6,18 @@
     frame_id: "soil_sensor"
     measurement_period: 1.0
 
+/soil_sampler/sen0658:
+  ros__parameters:
+    port: "/dev/serial/by-id/usb-FTDI_USB-RS485_Cable_FT54EVY9-if00-port0"
+    baudrate: 4800
+    address: 1
+    frame_id: "soil_sensor"
+    measurement_period: 1.0
+
 /soil_sampler/soil_sampler:
   ros__parameters:
     maximum_depth: 0.3
-    maximum_force: 30.0
+    maximum_force: 100.0
 
     insertion_timeout: 60.0
     retraction_timeout: 60.0

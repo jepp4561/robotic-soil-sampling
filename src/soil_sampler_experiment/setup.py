@@ -1,4 +1,5 @@
 from setuptools import find_packages, setup
+from glob import glob
 
 package_name = "soil_sampler_experiment"
 
@@ -16,8 +17,8 @@ setup(
             ["package.xml"],
         ),
         (
-            f"share/{package_name}/launch",
-            ["launch/experiment_sim.launch.py"],
+            'share/' + package_name + '/launch',
+            glob('launch/*.launch.py')
         ),
         (
             f"share/{package_name}/config",

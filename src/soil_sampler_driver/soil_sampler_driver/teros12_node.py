@@ -98,7 +98,8 @@ class Teros12Node(Node):
             return
 
         try:
-            vwc = float(values[-3])
+            raw_vwc = float(values[-3])
+            vwc = 3.879e-4 * raw_vwc - 0.6956 # METER's calibration equation for vwc
             temperature = float(values[-2])
             ec = float(values[-1])
         except ValueError:

@@ -6,21 +6,14 @@ from rclpy.callback_groups import ReentrantCallbackGroup
 from rclpy.executors import MultiThreadedExecutor
 from rclpy.node import Node
 
-from sensor_msgs.msg import Temperature
-from std_msgs.msg import Float32
-from std_msgs.msg import Int32
-from std_msgs.msg import UInt32
+from sensor_msgs.msg import Temperature, RelativeHumidity, FluidPressure, Illuminance
+from std_msgs.msg import Float32, Int32, UInt32
 
 from soil_sampler_interfaces.action import TakeSoilSample
-from soil_sampler_interfaces.msg import ActuatorCommand
-from soil_sampler_interfaces.msg import ActuatorState
-from soil_sampler_interfaces.msg import SoilSample
+from soil_sampler_interfaces.msg import ActuatorCommand, ActuatorState, SoilSample
 
-from .sampler_state_machine import SamplerState
-from .sampler_state_machine import SamplerStateMachine
-from .sampler_statistics import calculate_circular_statistics
-from .sampler_statistics import calculate_mode
-from .sampler_statistics import calculate_statistics
+from .sampler_state_machine import SamplerState, SamplerStateMachine
+from .sampler_statistics import calculate_circular_statistics, calculate_mode, calculate_statistics
 
 
 EXTEND = 1
@@ -71,16 +64,17 @@ class SoilSamplerNode(Node):
         self.vwc_subscription = self.create_subscription(Float32, "teros12/volumetric_water_content", self.vwc_callback, 10, callback_group=self.callback_group)
         self.temperature_subscription = self.create_subscription(Temperature, "teros12/temperature", self.temperature_callback, 10, callback_group=self.callback_group)
         self.ec_subscription = self.create_subscription(Float32, "teros12/electrical_conductivity", self.ec_callback, 10, callback_group=self.callback_group)
+
         self.wind_speed_subscription = self.create_subscription(Float32, "sen0658/wind_speed", self.wind_speed_callback, 10, callback_group=self.callback_group)
         self.wind_direction_gear_subscription = self.create_subscription(Int32, "sen0658/wind_direction_gear", self.wind_direction_gear_callback, 10, callback_group=self.callback_group)
         self.wind_direction_subscription = self.create_subscription(Float32, "sen0658/wind_direction", self.wind_direction_callback, 10, callback_group=self.callback_group)
-        self.humidity_subscription = self.create_subscription(Float32, "sen0658/humidity", self.humidity_callback, 10, callback_group=self.callback_group)
-        self.air_temperature_subscription = self.create_subscription(Float32, "sen0658/temperature", self.air_temperature_callback, 10, callback_group=self.callback_group)
+        self.humidity_subscription = self.create_subscription(RelativeHumidity, "sen0658/humidity", self.humidity_callback, 10, callback_group=self.callback_group)
+        self.air_temperature_subscription = self.create_subscription(Temperature, "sen0658/temperature", self.air_temperature_callback, 10, callback_group=self.callback_group)
         self.noise_subscription = self.create_subscription(Float32, "sen0658/noise", self.noise_callback, 10, callback_group=self.callback_group)
+        self.illuminance_subscription = self.create_subscription(Illuminance, "sen0658/illuminance", self.illuminance_callback, 10, callback_group=self.callback_group)
         self.pm2_5_subscription = self.create_subscription(Float32, "sen0658/pm2_5", self.pm2_5_callback, 10, callback_group=self.callback_group)
         self.pm10_subscription = self.create_subscription(Float32, "sen0658/pm10", self.pm10_callback, 10, callback_group=self.callback_group)
-        self.pressure_subscription = self.create_subscription(Float32, "sen0658/pressure", self.pressure_callback, 10, callback_group=self.callback_group)
-        self.illumination_subscription = self.create_subscription(UInt32, "sen0658/illumination", self.illumination_callback, 10, callback_group=self.callback_group)
+        self.pressure_subscription = self.create_subscription(FluidPressure, "sen0658/atmospheric_pressure", self.pressure_callback, 10, callback_group=self.callback_group)
         self.rainfall_subscription = self.create_subscription(Float32, "sen0658/rainfall", self.rainfall_callback, 10, callback_group=self.callback_group)
 
         self.vertical_actuator_state: ActuatorState | None = None
@@ -98,7 +92,7 @@ class SoilSamplerNode(Node):
         self.latest_pm2_5: float | None = None
         self.latest_pm10: float | None = None
         self.latest_pressure: float | None = None
-        self.latest_illumination: int | None = None
+        self.latest_illuminance: int | None = None
         self.latest_rainfall: float | None = None
 
         self.sampling_active = False
@@ -137,11 +131,11 @@ class SoilSamplerNode(Node):
     def wind_direction_callback(self, message: Float32) -> None:
         self.latest_wind_direction = float(message.data)
 
-    def humidity_callback(self, message: Float32) -> None:
-        self.latest_humidity = float(message.data)
+    def humidity_callback(self, message: RelativeHumidity) -> None:
+        self.latest_humidity = float(message.relative_humidity)
 
-    def air_temperature_callback(self, message: Float32) -> None:
-        self.latest_air_temperature = float(message.data)
+    def air_temperature_callback(self, message: Temperature) -> None:
+        self.latest_air_temperature = float(message.temperature)
 
     def noise_callback(self, message: Float32) -> None:
         self.latest_noise = float(message.data)
@@ -152,11 +146,11 @@ class SoilSamplerNode(Node):
     def pm10_callback(self, message: Float32) -> None:
         self.latest_pm10 = float(message.data)
 
-    def pressure_callback(self, message: Float32) -> None:
-        self.latest_pressure = float(message.data)
+    def pressure_callback(self, message: FluidPressure) -> None:
+        self.latest_pressure = float(message.fluid_pressure)
 
-    def illumination_callback(self, message: UInt32) -> None:
-        self.latest_illumination = int(message.data)
+    def illuminance_callback(self, message: Illuminance) -> None:
+        self.latest_illuminance = int(message.illuminance)
 
     def rainfall_callback(self, message: Float32) -> None:
         self.latest_rainfall = float(message.data)
@@ -310,8 +304,7 @@ class SoilSamplerNode(Node):
     def retract_to_home_after_rock(self, goal_handle, feedback, double_row: bool) -> bool:
         self.state_machine.rock_detected()
 
-        self.stop_vertical()
-        self.stop_horizontal()
+        self.stop_all_actuators()
 
         feedback.current_state = SamplerState.ROCK_DETECTED.name
         feedback.current_depth = self.vertical_position() or 0.0
@@ -389,7 +382,7 @@ class SoilSamplerNode(Node):
         pm10_samples: list[float] = []
         pressure_samples: list[float] = []
         wind_direction_gear_samples: list[int] = []
-        illumination_samples: list[int] = []
+        illuminance_samples: list[int] = []
         rainfall_samples: list[float] = []
 
         self.state_machine.start_insertion()
@@ -467,8 +460,8 @@ class SoilSamplerNode(Node):
             if self.latest_wind_direction_gear is not None:
                 wind_direction_gear_samples.append(self.latest_wind_direction_gear)
 
-            if self.latest_illumination is not None:
-                illumination_samples.append(self.latest_illumination)
+            if self.latest_illuminance is not None:
+                illuminance_samples.append(self.latest_illuminance)
 
             if self.latest_rainfall is not None:
                 rainfall_samples.append(self.latest_rainfall)
@@ -493,7 +486,7 @@ class SoilSamplerNode(Node):
             (pm10_samples, "PM10"),
             (pressure_samples, "pressure"),
             (wind_direction_gear_samples, "wind direction gear"),
-            (illumination_samples, "illumination"),
+            (illuminance_samples, "illuminance"),
             (rainfall_samples, "rainfall"),
         ]
 
@@ -517,6 +510,7 @@ class SoilSamplerNode(Node):
         if not success:
             return False, reason, False, None
 
+
         vwc_statistics = calculate_statistics(vwc_samples)
         soil_temperature_statistics = calculate_statistics(soil_temperature_samples)
         ec_statistics = calculate_statistics(ec_samples)
@@ -529,7 +523,7 @@ class SoilSamplerNode(Node):
         pm10_statistics = calculate_statistics(pm10_samples)
         pressure_statistics = calculate_statistics(pressure_samples)
         wind_direction_gear = calculate_mode(wind_direction_gear_samples)
-        illumination_statistics = calculate_statistics(illumination_samples)
+        illuminance_statistics = calculate_statistics(illuminance_samples)
         rainfall_statistics = calculate_statistics(rainfall_samples)
 
         sample = SoilSample()
@@ -560,7 +554,7 @@ class SoilSamplerNode(Node):
         sample.sen0658.pm10_stddev = pm10_statistics.stddev
         sample.sen0658.pressure_mean = pressure_statistics.mean
         sample.sen0658.pressure_stddev = pressure_statistics.stddev
-        sample.sen0658.illumination = round(illumination_statistics.mean)
+        sample.sen0658.illuminance = round(illuminance_statistics.mean)
         sample.sen0658.rainfall = rainfall_statistics.mean
 
         return True, "", False, sample
@@ -728,7 +722,7 @@ class SoilSamplerNode(Node):
             return result
 
         except Exception as exc:
-            self.get_logger().error(f"Soil sampling failed: {exc}", exc_info=True)
+            self.get_logger().error(f"Soil sampling failed: {exc}")
             self.stop_all_actuators()
             self.state_machine.error()
 

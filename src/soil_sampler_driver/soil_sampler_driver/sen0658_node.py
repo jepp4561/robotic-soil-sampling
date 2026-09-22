@@ -42,7 +42,7 @@ class Sen0658Node(Node):
     def __init__(self):
         super().__init__("sen0658")
 
-        self.declare_parameter("port", "/dev/ttyUSB0")
+        self.declare_parameter("port", "/dev/serial/by-id/usb-FTDI_USB-RS485_Cable_FT54EVY9-if00-port0")
         self.declare_parameter("baudrate", 4800)
         self.declare_parameter("address", 1)
         self.declare_parameter("frame_id", "weather_station")
@@ -59,7 +59,7 @@ class Sen0658Node(Node):
         self.wind_speed_scale = self.get_parameter("wind_speed_scale").value
 
         self.wind_speed_publisher = self.create_publisher(Float32, "sen0658/wind_speed", 10)
-        self.wind_direction_sector_publisher = self.create_publisher(Int32, "sen0658/wind_direction_sector", 10)
+        self.wind_direction_sector_publisher = self.create_publisher(Int32, "sen0658/wind_direction_gear", 10)
         self.wind_direction_publisher = self.create_publisher(Float32, "sen0658/wind_direction", 10)
         self.humidity_publisher = self.create_publisher(RelativeHumidity, "sen0658/humidity", 10)
         self.temperature_publisher = self.create_publisher(Temperature, "sen0658/temperature", 10)
