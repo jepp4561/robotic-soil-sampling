@@ -32,6 +32,10 @@ class SimulatedSoilSamplerPico(Node):
         self.declare_parameter("calibration_tolerance", 0.001)
         self.declare_parameter("state_publish_rate", 10.0)
 
+        # temporary parameter to enable/disable horizontal actuator for testing purposes
+        self.declare_parameter("horizontal_actuator_enabled", True)
+        self.horizontal_actuator_enabled_parameter = bool(self.get_parameter("horizontal_actuator_enabled").value)
+
         self.horizontal_joint_name = self.get_parameter("horizontal_joint_name").value
         self.vertical_joint_name = self.get_parameter("vertical_joint_name").value
 
@@ -66,10 +70,12 @@ class SimulatedSoilSamplerPico(Node):
         self._warned_missing_horizontal_joint = False
         self._warned_missing_vertical_joint = False
 
-        self.horizontal_command_sub = self.create_subscription(ActuatorCommand, "horizontal_actuator/command", self.horizontal_command_callback, 10)
+        if self.horizontal_actuator_enabled_parameter:
+            self.horizontal_command_sub = self.create_subscription(ActuatorCommand, "horizontal_actuator/command", self.horizontal_command_callback, 10)
+            self.horizontal_state_pub = self.create_publisher(ActuatorState, "horizontal_actuator/state", 10)
+        
         self.vertical_command_sub = self.create_subscription(ActuatorCommand, "vertical_actuator/command", self.vertical_command_callback, 10)
         self.calibration_sub = self.create_subscription(Bool, "calibration_command", self.calibration_callback, 10)
-        self.horizontal_state_pub = self.create_publisher(ActuatorState, "horizontal_actuator/state", 10)
         self.vertical_state_pub = self.create_publisher(ActuatorState, "vertical_actuator/state", 10)
         self.load_cell_pub = self.create_publisher(Float32, "load_cell_reading", 10)
         self.vwc_pub = self.create_publisher(Float32, "teros12/volumetric_water_content", 10)

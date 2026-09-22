@@ -15,3 +15,5 @@
     retraction_timeout: 60.0
 
     position_tolerance: 2.0
+
+    horizontal_actuator_enabled: false

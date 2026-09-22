@@ -66,8 +66,8 @@ def generate_launch_description():
     return LaunchDescription([
         husky_sim,
         experiment_node,
-        # visualization_node,
-        dashboard,
+        visualization_node,
+        # dashboard,
 
         
     ])

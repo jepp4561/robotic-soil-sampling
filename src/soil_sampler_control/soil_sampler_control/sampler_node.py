@@ -53,14 +53,20 @@ class SoilSamplerNode(Node):
         self.measurement_timeout = float(self.get_parameter("measurement_timeout").value)
         self.position_threshold = float(self.get_parameter("position_threshold").value)
 
+        # temporary parameter to enable/disable horizontal actuator for testing purposes
+        self.declare_parameter("horizontal_actuator_enabled", True)
+        self.horizontal_actuator_enabled_parameter = bool(self.get_parameter("horizontal_actuator_enabled").value)
+
         self.state_machine = SamplerStateMachine(maximum_depth=self.maximum_depth, maximum_force=self.maximum_force)
         self.callback_group = ReentrantCallbackGroup()
         self.action_server = ActionServer(self, TakeSoilSample, "take_sample", self.execute_sample, callback_group=self.callback_group)
 
+        if self.horizontal_actuator_enabled_parameter:
+            self.horizontal_actuator_command_publisher = self.create_publisher(ActuatorCommand, "horizontal_actuator/command", 10)
+            self.horizontal_actuator_state_subscription = self.create_subscription(ActuatorState, "horizontal_actuator/state", self.horizontal_actuator_state_callback, 10, callback_group=self.callback_group)
+
         self.vertical_actuator_command_publisher = self.create_publisher(ActuatorCommand, "vertical_actuator/command", 10)
-        self.horizontal_actuator_command_publisher = self.create_publisher(ActuatorCommand, "horizontal_actuator/command", 10)
         self.vertical_actuator_state_subscription = self.create_subscription(ActuatorState, "vertical_actuator/state", self.vertical_actuator_state_callback, 10, callback_group=self.callback_group)
-        self.horizontal_actuator_state_subscription = self.create_subscription(ActuatorState, "horizontal_actuator/state", self.horizontal_actuator_state_callback, 10, callback_group=self.callback_group)
         self.force_subscription = self.create_subscription(Float32, "load_cell_reading", self.force_callback, 10, callback_group=self.callback_group)
         self.vwc_subscription = self.create_subscription(Float32, "teros12/volumetric_water_content", self.vwc_callback, 10, callback_group=self.callback_group)
         self.temperature_subscription = self.create_subscription(Temperature, "teros12/temperature", self.temperature_callback, 10, callback_group=self.callback_group)
@@ -173,7 +179,8 @@ class SoilSamplerNode(Node):
 
     def stop_all_actuators(self) -> None:
         self.stop_vertical()
-        self.stop_horizontal()
+        if self.horizontal_actuator_enabled_parameter:
+            self.stop_horizontal()
 
     def vertical_position(self) -> float | None:
         if self.vertical_actuator_state is None:
