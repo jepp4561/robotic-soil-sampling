@@ -54,8 +54,8 @@ def generate_launch_description():
             "bash",
             "-c",
             "source /opt/ros/jazzy/setup.bash && "
-            "source /home/jeppelocal/ros_ws/mobile_robot_ws/install/setup.bash && "
-            "source /home/jeppelocal/ros_ws/mobile_robot_ws/src/robotic-soil-sampling/.venv/bin/activate && "
+            "source /home/$USER/ros_ws/mobile_robot_ws/install/setup.bash && "
+            "source /home/$USER/ros_ws/mobile_robot_ws/src/robotic-soil-sampling/.venv/bin/activate && "
             "python -m soil_sampler_experiment.experiment_dashboard "
             "--ros-args -r __node:=soil_sampler_experiment_dashboard",
         ],
@@ -66,8 +66,8 @@ def generate_launch_description():
     return LaunchDescription([
         husky_sim,
         experiment_node,
-        visualization_node,
-        # dashboard,
+        # visualization_node,
+        dashboard,
 
         
     ])

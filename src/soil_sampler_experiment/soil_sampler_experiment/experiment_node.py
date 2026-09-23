@@ -21,7 +21,7 @@ class SoilSamplerExperimentNode(Node):
     def __init__(self) -> None:
         super().__init__("soil_sampler_experiment")
 
-        self.declare_parameter("robot_namespace", "husky")
+        self.declare_parameter("robot_namespace", "a300_00008")
         self.declare_parameter("sampler_action", "/soil_sampler/take_sample")
         self.declare_parameter("horizontal_sample_offset_x", 0.0)
         self.declare_parameter("horizontal_sample_offset_y", -0.25)

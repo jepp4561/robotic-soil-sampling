@@ -1,3 +1,4 @@
+import logging
 import threading
 
 import dash
@@ -36,6 +37,46 @@ class ExperimentVisualization(Node):
             return list(self.samples)
 
 
+def calculate_axis_ranges(samples):
+    if not samples:
+        return [-0.05, 0.05], [-0.05, 0.05]
+
+    x_values = [sample.x for sample in samples]
+    y_values = [sample.y for sample in samples]
+
+    x_min = min(x_values)
+    x_max = max(x_values)
+    y_min = min(y_values)
+    y_max = max(y_values)
+
+    x_center = (x_min + x_max) / 2
+    y_center = (y_min + y_max) / 2
+
+    x_extent = x_max - x_min
+    y_extent = y_max - y_min
+
+    minimum_extent = 0.05
+
+    x_extent = max(x_extent, minimum_extent)
+    y_extent = max(y_extent, minimum_extent)
+
+    padding = 0.25
+
+    x_extent *= 1.0 + padding
+    y_extent *= 1.0 + padding
+
+    return (
+        [
+            x_center - x_extent / 2,
+            x_center + x_extent / 2,
+        ],
+        [
+            y_center - y_extent / 2,
+            y_center + y_extent / 2,
+        ],
+    )
+
+
 def create_figure(samples):
     figure = make_subplots(
         rows=2,
@@ -46,66 +87,90 @@ def create_figure(samples):
             "Soil temperature",
             "Humidity",
         ),
+        horizontal_spacing=0.18,
+        vertical_spacing=0.16,
     )
 
-    if not samples:
-        figure.update_layout(
-            height=800,
-            margin=dict(l=60, r=60, t=80, b=60),
-        )
-        return figure
+    x_range, y_range = calculate_axis_ranges(samples)
 
     positions = [(sample.x, sample.y) for sample in samples]
 
     data = [
         (
-            [sample.sample.teros12.volumetric_water_content_mean for sample in samples],
-            "VWC",
+            [
+                sample.sample.teros12.volumetric_water_content_mean
+                for sample in samples
+            ],
             "VWC",
             1,
             1,
         ),
         (
-            [sample.sample.teros12.electrical_conductivity_mean for sample in samples],
-            "EC",
+            [
+                sample.sample.teros12.electrical_conductivity_mean
+                for sample in samples
+            ],
             "EC",
             1,
             2,
         ),
         (
-            [sample.sample.teros12.temperature_mean for sample in samples],
-            "Soil temperature",
+            [
+                sample.sample.teros12.temperature_mean
+                for sample in samples
+            ],
             "Soil temperature",
             2,
             1,
         ),
         (
-            [sample.sample.sen0658.humidity_mean for sample in samples],
-            "Humidity",
+            [
+                sample.sample.sen0658.humidity_mean
+                for sample in samples
+            ],
             "Humidity",
             2,
             2,
         ),
     ]
 
-    for values, title, colorbar_title, row, col in data:
+    colorbar_positions = {
+        (1, 1): dict(x=0.42, y=0.77),
+        (1, 2): dict(x=1.01, y=0.77),
+        (2, 1): dict(x=0.42, y=0.23),
+        (2, 2): dict(x=1.01, y=0.23),
+    }
+
+    for values, title, row, col in data:
+
         x = [position[0] for position in positions]
         y = [position[1] for position in positions]
+
+        colorbar = colorbar_positions[(row, col)]
 
         figure.add_trace(
             go.Scatter(
                 x=x,
                 y=y,
                 mode="markers+text",
-                text=[str(index + 1) for index in range(len(samples))],
+                text=[
+                    str(index + 1)
+                    for index in range(len(samples))
+                ],
                 textposition="top right",
                 marker=dict(
                     size=12,
-                    color=values,
+                    color=values if values else [0],
                     colorscale="Viridis",
                     showscale=len(values) > 1,
                     colorbar=dict(
-                        title=colorbar_title,
+                        title=title,
+                        x=colorbar["x"],
+                        y=colorbar["y"],
+                        xanchor="left",
+                        yanchor="middle",
+                        len=0.30,
+                        thickness=15,
                     ),
                 ),
                 hovertemplate=(
@@ -123,22 +188,48 @@ def create_figure(samples):
 
     figure.update_xaxes(
         title_text="X [m]",
+        range=x_range,
         showgrid=True,
         zeroline=False,
-        scaleanchor="y",
-        scaleratio=1,
+        constrain="domain",
     )
 
     figure.update_yaxes(
         title_text="Y [m]",
+        range=y_range,
         showgrid=True,
         zeroline=False,
+        constrain="domain",
     )
 
     figure.update_layout(
         height=800,
-        margin=dict(l=60, r=60, t=80, b=60),
+        margin=dict(
+            l=70,
+            r=120,
+            t=80,
+            b=60,
+        ),
         template="plotly_white",
+    )
+
+    figure.update_layout(
+        xaxis=dict(
+            scaleanchor="y",
+            scaleratio=1,
+        ),
+        xaxis2=dict(
+            scaleanchor="y2",
+            scaleratio=1,
+        ),
+        xaxis3=dict(
+            scaleanchor="y3",
+            scaleratio=1,
+        ),
+        xaxis4=dict(
+            scaleanchor="y4",
+            scaleratio=1,
+        ),
     )
 
     return figure
@@ -153,7 +244,10 @@ def create_dash_app(node):
             html.H1("Soil Sampling Experiment"),
             dcc.Graph(
                 id="experiment-plot",
-                style={"height": "85vh"},
+                style={
+                    "height": "85vh",
+                    "width": "100%",
+                },
                 config={
                     "displaylogo": False,
                     "scrollZoom": True,
@@ -195,6 +289,8 @@ def main(args=None) -> None:
     ros_thread.start()
 
     app = create_dash_app(node)
+
+    logging.getLogger("werkzeug").setLevel(logging.ERROR)
 
     try:
         app.run(

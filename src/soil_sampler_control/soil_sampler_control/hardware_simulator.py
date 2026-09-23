@@ -5,7 +5,7 @@ import random
 import rclpy
 from rclpy.node import Node
 
-from sensor_msgs.msg import JointState, Temperature
+from sensor_msgs.msg import JointState, Temperature, RelativeHumidity, FluidPressure, Illuminance
 from std_msgs.msg import Bool, Int32, UInt32, Float32, Float64MultiArray
 
 from soil_sampler_interfaces.msg import ActuatorCommand, ActuatorState
@@ -84,13 +84,13 @@ class SimulatedSoilSamplerPico(Node):
         self.wind_speed_pub = self.create_publisher(Float32, "sen0658/wind_speed", 10)
         self.wind_direction_gear_pub = self.create_publisher(Int32, "sen0658/wind_direction_gear", 10)
         self.wind_direction_pub = self.create_publisher(Float32, "sen0658/wind_direction", 10)
-        self.humidity_pub = self.create_publisher(Float32, "sen0658/humidity", 10)
-        self.air_temperature_pub = self.create_publisher(Float32, "sen0658/temperature", 10)
+        self.humidity_pub = self.create_publisher(RelativeHumidity, "sen0658/humidity", 10)
+        self.air_temperature_pub = self.create_publisher(Temperature, "sen0658/temperature", 10)
         self.noise_pub = self.create_publisher(Float32, "sen0658/noise", 10)
         self.pm2_5_pub = self.create_publisher(Float32, "sen0658/pm2_5", 10)
         self.pm10_pub = self.create_publisher(Float32, "sen0658/pm10", 10)
-        self.pressure_pub = self.create_publisher(Float32, "sen0658/pressure", 10)
-        self.illumination_pub = self.create_publisher(UInt32, "sen0658/illumination", 10)
+        self.pressure_pub = self.create_publisher(FluidPressure, "sen0658/atmospheric_pressure", 10)
+        self.illuminance_pub = self.create_publisher(Illuminance, "sen0658/illuminance", 10)
         self.rainfall_pub = self.create_publisher(Float32, "sen0658/rainfall", 10)
         self.joint_state_sub = self.create_subscription(JointState, "joint_states", self.joint_state_callback, 10)
         self.velocity_command_pub = self.create_publisher(Float64MultiArray, "velocity_command", 10)
@@ -290,12 +290,12 @@ class SimulatedSoilSamplerPico(Node):
         wind_direction_msg.data = random.gauss(5.0, 2.0)
         self.wind_direction_pub.publish(wind_direction_msg)
 
-        humidity_msg = Float32()
-        humidity_msg.data = random.gauss(5.0, 2.0)
+        humidity_msg = RelativeHumidity()
+        humidity_msg.relative_humidity = random.gauss(5.0, 2.0)
         self.humidity_pub.publish(humidity_msg)
 
-        air_temperature_msg = Float32()
-        air_temperature_msg.data = random.gauss(5.0, 2.0)
+        air_temperature_msg = Temperature()
+        air_temperature_msg.temperature = random.gauss(5.0, 2.0)
         self.air_temperature_pub.publish(air_temperature_msg)
 
         noise_msg = Float32()
@@ -310,13 +310,13 @@ class SimulatedSoilSamplerPico(Node):
         pm10_msg.data = random.gauss(5.0, 2.0)
         self.pm10_pub.publish(pm10_msg)
 
-        pressure_msg = Float32()
-        pressure_msg.data = random.gauss(5.0, 2.0)
+        pressure_msg = FluidPressure()
+        pressure_msg.fluid_pressure = random.gauss(5.0, 2.0)
         self.pressure_pub.publish(pressure_msg)
 
-        illumination_msg = UInt32()
-        illumination_msg.data = max(0, round(random.gauss(5.0, 2.0)))
-        self.illumination_pub.publish(illumination_msg)
+        illuminance_msg = Illuminance()
+        illuminance_msg.illuminance = random.gauss(400.0, 100.0)
+        self.illuminance_pub.publish(illuminance_msg)
 
         rainfall_msg = Float32()
         rainfall_msg.data = random.gauss(5.0, 2.0)
