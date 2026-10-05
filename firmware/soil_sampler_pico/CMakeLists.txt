@@ -39,6 +39,7 @@ target_link_libraries(soil_sampler_pico
     pico_stdlib
     ${MICRO_ROS_PICO_SDK_DIR}/libmicroros/libmicroros.a
     hardware_i2c
+    hardware_pwm
 )
 
 target_compile_options(soil_sampler_pico PRIVATE

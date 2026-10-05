@@ -1,12 +1,20 @@
 #include "actuator.h"
 
 #include "hardware/gpio.h"
+#include "hardware/pwm.h"
 #include "hardware/sync.h"
 #include "pico/stdlib.h"
+#include "pico/time.h"
 
 #define HALL_COUNTS_PER_METER 23335.0f
 
 #define MAX_ACTUATORS 8
+
+#define SOFT_START_MIN_DUTY 20
+#define SOFT_START_MAX_DUTY 100
+
+// PWM wrap value: 125 MHz / (PWM_WRAP + 1) = ~20 kHz
+#define PWM_WRAP 6249
 
 static actuator_t *actuators[MAX_ACTUATORS];
 static uint actuator_count = 0;
@@ -69,9 +77,18 @@ bool actuator_init(
     actuator->enabled = false;
     actuator->hall_counts_per_meter = HALL_COUNTS_PER_METER;
 
-    gpio_init(actuator->pwm_pin);
-    gpio_set_dir(actuator->pwm_pin, GPIO_OUT);
-    gpio_put(actuator->pwm_pin, 0);
+    gpio_set_function(actuator->pwm_pin, GPIO_FUNC_PWM);
+
+    pwm_config config = pwm_get_default_config();
+    pwm_config_set_clkdiv(&config, 1.0f);
+    pwm_config_set_wrap(&config, PWM_WRAP);
+
+    actuator->slice_num = pwm_gpio_to_slice_num(actuator->pwm_pin);
+    uint channel = pwm_gpio_to_channel(actuator->pwm_pin);
+
+    pwm_init(actuator->slice_num, &config, false);
+    pwm_set_chan_level(actuator->slice_num, channel, 0);
+    pwm_set_enabled(actuator->slice_num, true);
 
     gpio_init(actuator->dir_pin);
     gpio_set_dir(actuator->dir_pin, GPIO_OUT);
@@ -122,7 +139,7 @@ void actuator_extend(actuator_t *actuator)
     actuator->current_direction = 1;
 
     gpio_put(actuator->dir_pin, 1);
-    gpio_put(actuator->pwm_pin, 1);
+    actuator_soft_start(actuator);
 }
 
 void actuator_retract(actuator_t *actuator)
@@ -134,7 +151,7 @@ void actuator_retract(actuator_t *actuator)
     actuator->current_direction = -1;
 
     gpio_put(actuator->dir_pin, 0);
-    gpio_put(actuator->pwm_pin, 1);
+    actuator_soft_start(actuator);
 }
 
 void actuator_stop(actuator_t *actuator)
@@ -143,9 +160,49 @@ void actuator_stop(actuator_t *actuator)
         return;
     }
 
-    gpio_put(actuator->pwm_pin, 0);
+    pwm_set_chan_level(actuator->slice_num, pwm_gpio_to_channel(actuator->pwm_pin), 0);
     actuator->current_direction = 0;
+    actuator->pwm_duty = 0;
 }
+
+void actuator_soft_start(actuator_t *actuator)
+{
+    if (actuator == NULL) {
+        return;
+    }
+
+    const uint8_t step_size = 10;
+    const uint32_t step_delay_ms = 12;
+ The level is calculated by multiplying the duty cycle (in percentage) by the PWM wrap value and dividing by 100 to get the actual level for the PWM channel.
+    for (uint8_t duty = SOFT_START_MIN_DUTY;
+         duty <= SOFT_START_MAX_DUTY;
+         duty += step_size)
+    {
+        actuator->pwm_duty = duty;
+
+        uint16_t level =
+            (uint16_t)((duty * PWM_WRAP) / 100);
+        // level is the PWM level corresponding to the duty cycle in relation to the frequency of the PWM (PWM_WRAP).
+
+        pwm_set_chan_level(
+            actuator->slice_num,
+            pwm_gpio_to_channel(actuator->pwm_pin),
+            level
+        );
+
+        if (duty < SOFT_START_MAX_DUTY) {
+            sleep_ms(step_delay_ms);
+        }
+    }
+
+    actuator->pwm_duty = SOFT_START_MAX_DUTY;
+
+    pwm_set_chan_level(
+        actuator->slice_num,
+        pwm_gpio_to_channel(actuator->pwm_pin),
+        PWM_WRAP
+    );
+} 
 
 void actuator_enable(actuator_t *actuator, bool enable)
 {

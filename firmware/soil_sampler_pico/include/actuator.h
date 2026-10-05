@@ -4,6 +4,7 @@
 #include <stdint.h>
 #include <stdbool.h>
 #include "pico/types.h"
+#include "pico/time.h"
 
 typedef struct {
     uint pwm_pin;
@@ -11,12 +12,15 @@ typedef struct {
     uint sleep_pin;
     uint fault_pin;
     uint hall_pin;
+    uint slice_num;
 
     volatile int32_t hall_count;
     volatile int8_t current_direction;
     volatile bool enabled;
 
     float hall_counts_per_meter;
+
+    uint8_t pwm_duty;
 } actuator_t;
 
 bool actuator_init(
@@ -42,5 +46,7 @@ bool actuator_fault_active(const actuator_t *actuator);
 int32_t actuator_get_hall_count(const actuator_t *actuator);
 float actuator_get_position(const actuator_t *actuator);
 int8_t actuator_get_direction(const actuator_t *actuator);
+
+void actuator_soft_start(actuator_t *actuator);
 
 #endif
