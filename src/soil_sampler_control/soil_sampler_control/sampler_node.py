@@ -1,6 +1,9 @@
 import time
+from typing import TYPE_CHECKING
 
 import rclpy
+if TYPE_CHECKING:
+    from rclpy.action.server import ServerGoalHandle
 from rclpy.action import ActionServer
 from rclpy.callback_groups import ReentrantCallbackGroup
 from rclpy.executors import MultiThreadedExecutor
@@ -11,6 +14,7 @@ from std_msgs.msg import Float32, Int32, UInt32
 
 from soil_sampler_interfaces.action import TakeSoilSample
 from soil_sampler_interfaces.msg import ActuatorCommand, ActuatorState, SoilSample
+from soil_sampler_interfaces.srv import GetRestDepth
 
 from .sampler_state_machine import SamplerState, SamplerStateMachine
 from .sampler_statistics import calculate_circular_statistics, calculate_mode, calculate_statistics
@@ -26,23 +30,21 @@ class SoilSamplerNode(Node):
     def __init__(self) -> None:
         super().__init__("soil_sampler")
 
-        self.declare_parameter("maximum_depth", 0.3)
+        self.declare_parameter("maximum_depth", 0.301)
+        self.declare_parameter("rest_depth", 0.2)
         self.declare_parameter("maximum_horizontal_distance", 0.25)
         self.declare_parameter("maximum_force", 50.0)
-        self.declare_parameter("insertion_timeout", 60.0)
-        self.declare_parameter("retraction_timeout", 60.0)
-        self.declare_parameter("horizontal_extension_timeout", 60.0)
-        self.declare_parameter("horizontal_retraction_timeout", 60.0)
+        self.declare_parameter("vertical_actuator_timeout", 60.0)
+        self.declare_parameter("horizontal_actuator_timeout", 60.0)
         self.declare_parameter("measurement_timeout", 5.0)
         self.declare_parameter("position_threshold", 0.001)
 
         self.maximum_depth = float(self.get_parameter("maximum_depth").value)
+        self.rest_depth = float(self.get_parameter("rest_depth").value)
         self.maximum_horizontal_distance = float(self.get_parameter("maximum_horizontal_distance").value)
         self.maximum_force = float(self.get_parameter("maximum_force").value)
-        self.insertion_timeout = float(self.get_parameter("insertion_timeout").value)
-        self.retraction_timeout = float(self.get_parameter("retraction_timeout").value)
-        self.horizontal_extension_timeout = float(self.get_parameter("horizontal_extension_timeout").value)
-        self.horizontal_retraction_timeout = float(self.get_parameter("horizontal_retraction_timeout").value)
+        self.vertical_actuator_timeout = float(self.get_parameter("vertical_actuator_timeout").value)
+        self.horizontal_actuator_timeout = float(self.get_parameter("horizontal_actuator_timeout").value)
         self.measurement_timeout = float(self.get_parameter("measurement_timeout").value)
         self.position_threshold = float(self.get_parameter("position_threshold").value)
 
@@ -76,6 +78,8 @@ class SoilSamplerNode(Node):
         self.pm10_subscription = self.create_subscription(Float32, "sen0658/pm10", self.pm10_callback, 10, callback_group=self.callback_group)
         self.pressure_subscription = self.create_subscription(FluidPressure, "sen0658/atmospheric_pressure", self.pressure_callback, 10, callback_group=self.callback_group)
         self.rainfall_subscription = self.create_subscription(Float32, "sen0658/rainfall", self.rainfall_callback, 10, callback_group=self.callback_group)
+
+        self.rest_depth_service = self.create_service(GetRestDepth, "get_rest_depth", self.get_rest_depth_callback, callback_group=self.callback_group)
 
         self.vertical_actuator_state: ActuatorState | None = None
         self.horizontal_actuator_state: ActuatorState | None = None
@@ -155,6 +159,13 @@ class SoilSamplerNode(Node):
     def rainfall_callback(self, message: Float32) -> None:
         self.latest_rainfall = float(message.data)
 
+    def get_rest_depth_callback(self, request: GetRestDepth.Request, response: GetRestDepth.Response) -> GetRestDepth.Response:
+        del request
+        response.rest_depth = self.rest_depth
+        self.get_logger().info(f"Returning rest depth: {self.rest_depth:.3f} m")
+        return response
+
+
     def publish_vertical_command(self, direction: int) -> None:
         command = ActuatorCommand()
         command.direction = direction
@@ -196,7 +207,7 @@ class SoilSamplerNode(Node):
             return False
         return bool(self.horizontal_actuator_state.enabled)
 
-    def wait_for_vertical_position(self, target_position: float, direction: int, timeout: float, goal_handle, feedback, detect_rock: bool = False) -> tuple[bool, str, bool]:
+    def wait_for_vertical_position(self, target_position: float, direction: int, timeout: float, goal_handle: "ServerGoalHandle[TakeSoilSample.Goal]", feedback: TakeSoilSample.Feedback, detect_rock: bool = False) -> tuple[bool, str, bool]:
         start_time = time.monotonic()
 
         while True:
@@ -258,7 +269,7 @@ class SoilSamplerNode(Node):
 
             time.sleep(0.05)
 
-    def wait_for_horizontal_position(self, target_position: float, direction: int, timeout: float, goal_handle, feedback) -> tuple[bool, str]:
+    def wait_for_horizontal_position(self, target_position: float, direction: int, timeout: float, goal_handle: "ServerGoalHandle[TakeSoilSample.Goal]", feedback: TakeSoilSample.Feedback) -> tuple[bool, str]:
         start_time = time.monotonic()
 
         while True:
@@ -301,7 +312,7 @@ class SoilSamplerNode(Node):
 
             time.sleep(0.05)
 
-    def retract_to_home_after_rock(self, goal_handle, feedback, double_row: bool) -> bool:
+    def retract_to_home_after_rock(self, goal_handle: "ServerGoalHandle[TakeSoilSample.Goal]", feedback: TakeSoilSample.Feedback, double_row: bool) -> bool:
         self.state_machine.rock_detected()
 
         self.stop_all_actuators()
@@ -325,7 +336,7 @@ class SoilSamplerNode(Node):
         while True:
             position = self.vertical_position()
 
-            if position is not None and position <= self.position_threshold:
+            if position is not None and position <= self.rest_depth:
                 self.stop_vertical()
                 break
 
@@ -358,7 +369,7 @@ class SoilSamplerNode(Node):
                     self.stop_horizontal()
                     break
 
-                if time.monotonic() - start_time > self.horizontal_retraction_timeout:
+                if time.monotonic() - start_time > self.horizontal_actuator_timeout:
                     self.stop_horizontal()
                     self.get_logger().error("Horizontal actuator failed to return to home after rock detection.")
                     return False
@@ -369,7 +380,7 @@ class SoilSamplerNode(Node):
 
         return True
 
-    def collect_sample(self, goal_handle, feedback, target_depth: float, dwell_time: float) -> tuple[bool, str, bool, SoilSample | None]:
+    def collect_sample(self, goal_handle: "ServerGoalHandle[TakeSoilSample.Goal]", feedback: TakeSoilSample.Feedback, target_depth: float, dwell_time: float) -> tuple[bool, str, bool, SoilSample | None]:
         vwc_samples: list[float] = []
         soil_temperature_samples: list[float] = []
         ec_samples: list[float] = []
@@ -396,7 +407,7 @@ class SoilSamplerNode(Node):
 
         self.publish_vertical_command(EXTEND)
 
-        success, reason, rock_detected = self.wait_for_vertical_position(target_position=target_depth, direction=EXTEND, timeout=self.insertion_timeout, goal_handle=goal_handle, feedback=feedback, detect_rock=True)
+        success, reason, rock_detected = self.wait_for_vertical_position(target_position=target_depth, direction=EXTEND, timeout=self.vertical_actuator_timeout, goal_handle=goal_handle, feedback=feedback, detect_rock=True)
 
         if not success:
             return False, reason, rock_detected, None
@@ -505,7 +516,7 @@ class SoilSamplerNode(Node):
 
         self.publish_vertical_command(RETRACT)
 
-        success, reason, _ = self.wait_for_vertical_position(target_position=0.0, direction=RETRACT, timeout=self.retraction_timeout, goal_handle=goal_handle, feedback=feedback, detect_rock=False)
+        success, reason, _ = self.wait_for_vertical_position(target_position=self.rest_depth, direction=RETRACT, timeout=self.vertical_actuator_timeout, goal_handle=goal_handle, feedback=feedback, detect_rock=False)
 
         if not success:
             return False, reason, False, None
@@ -559,8 +570,8 @@ class SoilSamplerNode(Node):
 
         return True, "", False, sample
 
-    def execute_sample(self, goal_handle) -> TakeSoilSample.Result:
-        request = goal_handle.request
+    def execute_sample(self, goal_handle: "ServerGoalHandle[TakeSoilSample.Goal]") -> TakeSoilSample.Result:
+        request: TakeSoilSample.Goal = goal_handle.request
 
         result = TakeSoilSample.Result()
         feedback = TakeSoilSample.Feedback()
@@ -639,7 +650,7 @@ class SoilSamplerNode(Node):
 
                 self.publish_horizontal_command(EXTEND)
 
-                success, reason = self.wait_for_horizontal_position(target_position=self.maximum_horizontal_distance, direction=EXTEND, timeout=self.horizontal_extension_timeout, goal_handle=goal_handle, feedback=feedback)
+                success, reason = self.wait_for_horizontal_position(target_position=self.maximum_horizontal_distance, direction=EXTEND, timeout=self.horizontal_actuator_timeout, goal_handle=goal_handle, feedback=feedback)
 
                 if not success:
                     if goal_handle.is_cancel_requested:
@@ -691,7 +702,7 @@ class SoilSamplerNode(Node):
                 self.get_logger().info("Retracting horizontal actuator.")
                 self.publish_horizontal_command(RETRACT)
 
-                success, reason = self.wait_for_horizontal_position(target_position=0.0, direction=RETRACT, timeout=self.horizontal_retraction_timeout, goal_handle=goal_handle, feedback=feedback)
+                success, reason = self.wait_for_horizontal_position(target_position=0.0, direction=RETRACT, timeout=self.horizontal_actuator_timeout, goal_handle=goal_handle, feedback=feedback)
 
                 if not success:
                     if goal_handle.is_cancel_requested:

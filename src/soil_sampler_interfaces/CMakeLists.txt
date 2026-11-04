@@ -16,6 +16,7 @@ rosidl_generate_interfaces(${PROJECT_NAME}
   "msg/SoilSample.msg"
   "msg/ExperimentSample.msg"
   # "srv/SetSafeguards.srv"
+  "srv/GetRestDepth.srv"
 )
 
 ament_package()

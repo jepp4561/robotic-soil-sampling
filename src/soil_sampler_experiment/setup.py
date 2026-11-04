@@ -21,8 +21,8 @@ setup(
             glob('launch/*.launch.py')
         ),
         (
-            f"share/{package_name}/config",
-            ["config/experiment.yaml"],
+            'share/' + package_name + '/config',
+            glob('config/*.yaml')
         ),
     ],
     install_requires=["setuptools"],

@@ -21,12 +21,7 @@ class ExperimentVisualization(Node):
         self.samples = []
         self.lock = threading.Lock()
 
-        self.subscription = self.create_subscription(
-            ExperimentSample,
-            "sample",
-            self.sample_callback,
-            10,
-        )
+        self.subscription = self.create_subscription(ExperimentSample, "sample", self.sample_callback, 10)
 
     def sample_callback(self, message: ExperimentSample) -> None:
         with self.lock:
@@ -65,16 +60,7 @@ def calculate_axis_ranges(samples):
     x_extent *= 1.0 + padding
     y_extent *= 1.0 + padding
 
-    return (
-        [
-            x_center - x_extent / 2,
-            x_center + x_extent / 2,
-        ],
-        [
-            y_center - y_extent / 2,
-            y_center + y_extent / 2,
-        ],
-    )
+    return ([x_center - x_extent / 2, x_center + x_extent / 2], [y_center - y_extent / 2, y_center + y_extent / 2,])
 
 
 def create_figure(samples):
@@ -96,42 +82,10 @@ def create_figure(samples):
     positions = [(sample.x, sample.y) for sample in samples]
 
     data = [
-        (
-            [
-                sample.sample.teros12.volumetric_water_content_mean
-                for sample in samples
-            ],
-            "VWC",
-            1,
-            1,
-        ),
-        (
-            [
-                sample.sample.teros12.electrical_conductivity_mean
-                for sample in samples
-            ],
-            "EC",
-            1,
-            2,
-        ),
-        (
-            [
-                sample.sample.teros12.temperature_mean
-                for sample in samples
-            ],
-            "Soil temperature",
-            2,
-            1,
-        ),
-        (
-            [
-                sample.sample.sen0658.humidity_mean
-                for sample in samples
-            ],
-            "Humidity",
-            2,
-            2,
-        ),
+        ([sample.sample.teros12.volumetric_water_content_mean for sample in samples], "VWC", 1, 1,),
+        ([sample.sample.teros12.electrical_conductivity_mean for sample in samples], "EC", 1, 2,),
+        ([sample.sample.teros12.temperature_mean for sample in samples], "Soil temperature", 2, 1,),
+        ([sample.sample.sen0658.humidity_mean for sample in samples], "Humidity", 2, 2,),
     ]
 
     colorbar_positions = {

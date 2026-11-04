@@ -21,7 +21,7 @@ def generate_launch_description():
     config_file = os.path.join(
         pkg_soil_sampler_experiment,
         "config",
-        "experiment.yaml",
+        "experiment_sim.yaml",
     )
 
     husky_sim = IncludeLaunchDescription(

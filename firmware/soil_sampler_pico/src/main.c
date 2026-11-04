@@ -13,6 +13,7 @@
 
 #include <soil_sampler_interfaces/msg/actuator_command.h>
 #include <soil_sampler_interfaces/msg/actuator_state.h>
+#include <soil_sampler_interfaces/srv/get_rest_depth.h>
 
 #include "pico/stdlib.h"
 #include "pico_uart_transports.h"
@@ -35,17 +36,19 @@
 
 #define CALIBRATION_TIME_MS 10000
 
-#define VERTICAL_ACTUATOR_PWM_PIN 14
 #define VERTICAL_ACTUATOR_DIR_PIN 15
+#define VERTICAL_ACTUATOR_PWM_PIN 14
 #define VERTICAL_ACTUATOR_SLEEP_PIN 13
 #define VERTICAL_ACTUATOR_FAULT_PIN 12
 #define VERTICAL_ACTUATOR_HALL_PIN 11
+#define VERTICAL_ACTUATOR_CURRENT_SENSE_PIN 10
 
-#define HORIZONTAL_ACTUATOR_PWM_PIN 16
-#define HORIZONTAL_ACTUATOR_DIR_PIN 17
+#define HORIZONTAL_ACTUATOR_DIR_PIN 16
+#define HORIZONTAL_ACTUATOR_PWM_PIN 17
 #define HORIZONTAL_ACTUATOR_SLEEP_PIN 18
 #define HORIZONTAL_ACTUATOR_FAULT_PIN 19
 #define HORIZONTAL_ACTUATOR_HALL_PIN 21
+#define HORIZONTAL_ACTUATOR_CURRENT_SENSE_PIN 20
 
 static rcl_publisher_t load_cell_publisher;
 static rcl_timer_t load_cell_timer;
@@ -67,6 +70,10 @@ static soil_sampler_interfaces__msg__ActuatorState vertical_actuator_state_messa
 
 static rcl_subscription_t calibration_subscription;
 static std_msgs__msg__Bool calibration_message;
+static rcl_client_t rest_depth_client;
+static soil_sampler_interfaces__srv__GetRestDepth_Request rest_depth_request_message;
+static soil_sampler_interfaces__srv__GetRestDepth_Response rest_depth_response_message;
+float rest_depth = 0.0f;
 
 static rcl_timer_t actuator_position_timer;
 
@@ -88,20 +95,27 @@ static void fatal_error(void) {
 }
 
 static void calibrate(void) {
+    actuator_retract(&vertical_actuator);
     #ifdef horizontal_actuator
+    sleep_ms(5000);
     actuator_retract(&horizontal_actuator);
     #endif
-    actuator_retract(&vertical_actuator);
 
     sleep_ms(CALIBRATION_TIME_MS);
+
+    actuator_stop(&vertical_actuator);
+    actuator_hall_reset(&vertical_actuator);
 
     #ifdef horizontal_actuator
     actuator_stop(&horizontal_actuator);
     actuator_hall_reset(&horizontal_actuator);
     #endif
-    
+
+    actuator_extend(&vertical_actuator);
+    while (actuator_get_position(&vertical_actuator) < rest_depth) {
+        sleep_ms(50);
+    }
     actuator_stop(&vertical_actuator);
-    actuator_hall_reset(&vertical_actuator);
 
     load_cell_calibrate_bias(100);
 }
@@ -186,8 +200,16 @@ static void calibration_callback(const void *message) {
     const std_msgs__msg__Bool *command = (const std_msgs__msg__Bool *)message;
 
     if (command->data) {
-        calibrate();
+        int64_t sequence_number; 
+        rcl_ret_t ret = rcl_send_request(&rest_depth_client, &rest_depth_request_message, &sequence_number);
+        if (ret != RCL_RET_OK) fatal_error();
     }
+}
+
+static void rest_depth_response_callback(const void *response){
+    const soil_sampler_interfaces__srv__GetRestDepth_Response *res = (const soil_sampler_interfaces__srv__GetRestDepth_Response *)response;
+    rest_depth = res->rest_depth;
+    calibrate();
 }
 
 int main(void) {
@@ -265,9 +287,13 @@ int main(void) {
     ret = rclc_timer_init_default2(&actuator_position_timer, &support, RCL_MS_TO_NS(ACTUATOR_POSITION_PUBLISH_PERIOD_MS), actuator_position_timer_callback, true);
     if (ret != RCL_RET_OK) fatal_error();
 
+    ret = rclc_client_init_default(&rest_depth_client, &node, ROSIDL_GET_SRV_TYPE_SUPPORT(soil_sampler_interfaces, srv, GetRestDepth), "get_rest_depth");
+
+if (ret != RCL_RET_OK) fatal_error();
+
     rclc_executor_t executor;
 
-    uint8_t number_of_handles = 5;
+    uint8_t number_of_handles = 6;
     ret = rclc_executor_init(&executor, &support.context, number_of_handles, &allocator);
     if (ret != RCL_RET_OK) fatal_error();
 
@@ -287,6 +313,10 @@ int main(void) {
 
     ret = rclc_executor_add_subscription(&executor, &calibration_subscription, &calibration_message, &calibration_callback, ON_NEW_DATA);
     if (ret != RCL_RET_OK) fatal_error();
+
+    ret = rclc_executor_add_client(&executor, &rest_depth_client, &rest_depth_response_message, &rest_depth_response_callback);
+
+if (ret != RCL_RET_OK) fatal_error();
 
     load_cell_message.data = 0;
 
