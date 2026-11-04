@@ -16,6 +16,8 @@
 
 /soil_sampler/soil_sampler:
   ros__parameters:
+    pico_port: "/dev/serial/by-id/usb-Raspberry_Pi_Pico_E6612483CB52B72C-if00"
+
     maximum_depth: 0.3
     rest_depth: 0.2
     maximum_force: 100.0

@@ -1,3 +1,4 @@
+import yaml
 from launch import LaunchDescription
 from launch.actions import ExecuteProcess
 from launch_ros.actions import Node
@@ -14,6 +15,11 @@ def generate_launch_description():
         "soil_sampler.yaml",
     )
 
+    with open(config_file, "r") as file:
+        config = yaml.safe_load(file)
+
+    pico_port = config["/soil_sampler/soil_sampler"]["ros__parameters"]["pico_port"]
+
     soil_sampler_experiment_path = os.path.join(
         get_package_share_directory("soil_sampler_experiment"),
         "launch",
@@ -25,7 +31,6 @@ def generate_launch_description():
         output="screen",
     )
 
-    pico_port = "/dev/serial/by-id/usb-Raspberry_Pi_Pico_E6612483CB5D9E2B-if00"
 
     return LaunchDescription(
         [
