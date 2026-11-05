@@ -15,6 +15,13 @@ EXTEND = 1
 STOP = 0
 RETRACT = -1
 
+CALIBRATION_IDLE = 0
+CALIBRATION_VERTICAL_RETRACT = 1
+CALIBRATION_HORIZONTAL_RETRACT = 2
+CALIBRATION_RETRACTING = 3
+CALIBRATION_VERTICAL_EXTEND = 4
+CALIBRATION_LOAD_CELL_CALIBRATION = 5
+
 
 class SimulatedSoilSamplerPico(Node):
 
@@ -31,8 +38,10 @@ class SimulatedSoilSamplerPico(Node):
         self.declare_parameter("vertical_velocity", 0.01)
         self.declare_parameter("calibration_tolerance", 0.001)
         self.declare_parameter("state_publish_rate", 10.0)
+        self.declare_parameter("calibration_delay", 5.0)
+        self.declare_parameter("calibration_time", 10.0)
+        self.declare_parameter("rest_depth", 0.2)
 
-        # temporary parameter to enable/disable horizontal actuator for testing purposes
         self.declare_parameter("horizontal_actuator_enabled", True)
         self.horizontal_actuator_enabled_parameter = bool(self.get_parameter("horizontal_actuator_enabled").value)
 
@@ -48,6 +57,10 @@ class SimulatedSoilSamplerPico(Node):
         self.vertical_velocity = abs(float(self.get_parameter("vertical_velocity").value))
 
         self.calibration_tolerance = abs(float(self.get_parameter("calibration_tolerance").value))
+
+        self.calibration_delay = float(self.get_parameter("calibration_delay").value)
+        self.calibration_time = float(self.get_parameter("calibration_time").value)
+        self.rest_depth = float(self.get_parameter("rest_depth").value)
 
         state_publish_rate = float(self.get_parameter("state_publish_rate").value)
 
@@ -67,13 +80,16 @@ class SimulatedSoilSamplerPico(Node):
         self.have_vertical_position = False
 
         self.calibrating = False
+        self.calibration_state = CALIBRATION_IDLE
+        self.calibration_start_time = None
+
         self._warned_missing_horizontal_joint = False
         self._warned_missing_vertical_joint = False
 
         if self.horizontal_actuator_enabled_parameter:
             self.horizontal_command_sub = self.create_subscription(ActuatorCommand, "horizontal_actuator/command", self.horizontal_command_callback, 10)
             self.horizontal_state_pub = self.create_publisher(ActuatorState, "horizontal_actuator/state", 10)
-        
+
         self.vertical_command_sub = self.create_subscription(ActuatorCommand, "vertical_actuator/command", self.vertical_command_callback, 10)
         self.calibration_sub = self.create_subscription(Bool, "calibration_command", self.calibration_callback, 10)
         self.vertical_state_pub = self.create_publisher(ActuatorState, "vertical_actuator/state", 10)
@@ -138,17 +154,77 @@ class SimulatedSoilSamplerPico(Node):
             self._stop_vertical_actuator()
 
     def calibration_callback(self, msg: Bool):
-        if not msg.data or self.calibrating:
+        if not msg.data:
+            if self.calibrating:
+                self.calibrating = False
+                self.calibration_state = CALIBRATION_IDLE
+                self.calibration_start_time = None
+                self._stop_all_actuators()
+                self.get_logger().info("Calibration cancelled")
+            return
+
+        if self.calibrating:
             return
 
         self.calibrating = True
+        self.calibration_state = CALIBRATION_VERTICAL_RETRACT
+        self.calibration_start_time = self.get_clock().now()
 
-        self.horizontal_direction = RETRACT
+        self.horizontal_direction = STOP
         self.vertical_direction = RETRACT
 
         self._publish_velocity()
 
-        self.get_logger().info("Calibration started: retracting actuators")
+        self.get_logger().info("Calibration started: retracting vertical actuator")
+
+    def update_calibration(self):
+        if not self.calibrating:
+            return
+
+        now = self.get_clock().now()
+        elapsed = (now - self.calibration_start_time).nanoseconds / 1e9
+
+        if self.calibration_state == CALIBRATION_VERTICAL_RETRACT:
+            if elapsed >= self.calibration_delay:
+                if self.horizontal_actuator_enabled_parameter:
+                    self.horizontal_direction = RETRACT
+                    self.calibration_state = CALIBRATION_HORIZONTAL_RETRACT
+                    self.calibration_start_time = now
+                    self._publish_velocity()
+                    self.get_logger().info("Calibration: retracting horizontal actuator")
+                else:
+                    self.calibration_state = CALIBRATION_RETRACTING
+                    self.calibration_start_time = now
+
+        elif self.calibration_state == CALIBRATION_HORIZONTAL_RETRACT:
+            if elapsed >= 0.0:
+                self.calibration_state = CALIBRATION_RETRACTING
+                self.calibration_start_time = now
+
+        elif self.calibration_state == CALIBRATION_RETRACTING:
+            if elapsed >= self.calibration_time:
+                self._stop_all_actuators()
+
+                self.horizontal_position = self.horizontal_lower_limit
+                self.vertical_position = self.vertical_lower_limit
+
+                self.calibration_state = CALIBRATION_VERTICAL_EXTEND
+                self.calibration_start_time = now
+
+                self.vertical_direction = EXTEND
+                self._publish_velocity()
+
+                self.get_logger().info("Calibration: extending vertical actuator to rest depth")
+
+        elif self.calibration_state == CALIBRATION_VERTICAL_EXTEND:
+            if self.vertical_position >= self.rest_depth:
+                self._stop_vertical_actuator()
+
+                self.calibration_state = CALIBRATION_IDLE
+                self.calibrating = False
+                self.calibration_start_time = None
+
+                self.get_logger().info("Calibration complete")
 
     def _publish_velocity(self):
         horizontal_velocity = 0.0
@@ -196,7 +272,6 @@ class SimulatedSoilSamplerPico(Node):
 
     def joint_state_callback(self, msg: JointState):
         horizontal_found = self.horizontal_joint_name in msg.name
-
         vertical_found = self.vertical_joint_name in msg.name
 
         if not horizontal_found:
@@ -237,20 +312,25 @@ class SimulatedSoilSamplerPico(Node):
                 self.vertical_position = self.vertical_upper_limit
                 self.vertical_direction = STOP
 
-        if self.calibrating:
-            if self._horizontal_at_lower_limit() and self._vertical_at_lower_limit():
+        if self.calibrating and self.calibration_state == CALIBRATION_VERTICAL_EXTEND:
+            if self.vertical_position >= self.rest_depth:
+                self._stop_vertical_actuator()
+                self.calibration_state = CALIBRATION_IDLE
                 self.calibrating = False
-                self._stop_all_actuators()
+                self.calibration_start_time = None
                 self.get_logger().info("Calibration complete")
 
     def publish_state(self):
+        self.update_calibration()
+
         horizontal_state = ActuatorState()
         horizontal_state.current_direction = self.horizontal_direction
         horizontal_state.position = self.horizontal_position
         horizontal_state.enabled = self.horizontal_enabled
         horizontal_state.fault = self.horizontal_fault
 
-        self.horizontal_state_pub.publish(horizontal_state)
+        if self.horizontal_actuator_enabled_parameter:
+            self.horizontal_state_pub.publish(horizontal_state)
 
         vertical_state = ActuatorState()
         vertical_state.current_direction = self.vertical_direction

@@ -1,5 +1,6 @@
 #include <stdbool.h>
 #include <stdint.h>
+#include <stdio.h>
 
 #include <rcl/error_handling.h>
 #include <rcl/rcl.h>
@@ -96,13 +97,22 @@ static void fatal_error(void) {
 }
 
 static void calibrate(void) {
+    printf("Calibration started\n");
+
+    printf("Retracting vertical actuator\n");
     actuator_retract(&vertical_actuator);
+
     #ifdef HORIZONTAL_ACTUATOR
     sleep_ms(5000);
+
+    printf("Retracting horizontal actuator\n");
     actuator_retract(&horizontal_actuator);
     #endif
 
+    printf("Retracting actuators for %d ms\n", CALIBRATION_TIME_MS);
     sleep_ms(CALIBRATION_TIME_MS);
+
+    printf("Stopping actuators and resetting positions\n");
 
     actuator_stop(&vertical_actuator);
     actuator_hall_reset(&vertical_actuator);
@@ -112,13 +122,19 @@ static void calibrate(void) {
     actuator_hall_reset(&horizontal_actuator);
     #endif
 
+    printf("Extending vertical actuator to rest depth: %.3f m\n", rest_depth);
     actuator_extend(&vertical_actuator);
+
     while (actuator_get_position(&vertical_actuator) < rest_depth) {
         sleep_ms(50);
     }
+
     actuator_stop(&vertical_actuator);
 
+    printf("Calibrating load cell\n");
     load_cell_calibrate_bias(100);
+
+    printf("Calibration complete\n");
 }
 
 static void load_cell_timer_callback(rcl_timer_t *timer, int64_t last_call_time) {
@@ -214,6 +230,8 @@ static void rest_depth_response_callback(const void *response){
 }
 
 int main(void) {
+    stdio_init_all();
+
     rmw_uros_set_custom_transport(true, NULL, pico_serial_transport_open, pico_serial_transport_close, pico_serial_transport_write, pico_serial_transport_read);
 
     gpio_init(LED_PIN);
