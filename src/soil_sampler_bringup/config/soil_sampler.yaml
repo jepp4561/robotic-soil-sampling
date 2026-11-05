@@ -8,7 +8,7 @@
 
 /soil_sampler/sen0658:
   ros__parameters:
-    port: "/dev/serial/by-id/usb-FTDI_USB-RS485_Cable_FT54EVY9-if00-port0"
+    port: "/dev/serial/by-id/usb-1a86_USB_Serial-if00-port0"
     baudrate: 4800
     address: 1
     frame_id: "soil_sensor"

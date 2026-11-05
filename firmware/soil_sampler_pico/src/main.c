@@ -43,6 +43,7 @@
 #define VERTICAL_ACTUATOR_HALL_PIN 11
 #define VERTICAL_ACTUATOR_CURRENT_SENSE_PIN 10
 
+#define HORIZONTAL_ACTUATOR
 #define HORIZONTAL_ACTUATOR_DIR_PIN 16
 #define HORIZONTAL_ACTUATOR_PWM_PIN 17
 #define HORIZONTAL_ACTUATOR_SLEEP_PIN 18
@@ -54,7 +55,7 @@ static rcl_publisher_t load_cell_publisher;
 static rcl_timer_t load_cell_timer;
 static std_msgs__msg__Float32 load_cell_message;
 
-#ifdef horizontal_actuator
+#ifdef HORIZONTAL_ACTUATOR
 static actuator_t horizontal_actuator;
 static rcl_publisher_t horizontal_actuator_state_publisher;
 static rcl_subscription_t horizontal_actuator_command_subscription;
@@ -78,7 +79,7 @@ float rest_depth = 0.0f;
 static rcl_timer_t actuator_position_timer;
 
 static void fatal_error(void) {
-    #ifdef horizontal_actuator
+    #ifdef HORIZONTAL_ACTUATOR
     actuator_stop(&horizontal_actuator);
     actuator_enable(&horizontal_actuator, false);
     #endif
@@ -96,7 +97,7 @@ static void fatal_error(void) {
 
 static void calibrate(void) {
     actuator_retract(&vertical_actuator);
-    #ifdef horizontal_actuator
+    #ifdef HORIZONTAL_ACTUATOR
     sleep_ms(5000);
     actuator_retract(&horizontal_actuator);
     #endif
@@ -106,7 +107,7 @@ static void calibrate(void) {
     actuator_stop(&vertical_actuator);
     actuator_hall_reset(&vertical_actuator);
 
-    #ifdef horizontal_actuator
+    #ifdef HORIZONTAL_ACTUATOR
     actuator_stop(&horizontal_actuator);
     actuator_hall_reset(&horizontal_actuator);
     #endif
@@ -145,7 +146,7 @@ static void actuator_position_timer_callback(rcl_timer_t *timer, int64_t last_ca
         return;
     }
 
-    #ifdef horizontal_actuator
+    #ifdef HORIZONTAL_ACTUATOR
     horizontal_actuator_state_message.current_direction = actuator_get_direction(&horizontal_actuator);
     horizontal_actuator_state_message.position = actuator_get_position(&horizontal_actuator);
     horizontal_actuator_state_message.enabled = actuator_is_enabled(&horizontal_actuator);
@@ -164,7 +165,7 @@ static void actuator_position_timer_callback(rcl_timer_t *timer, int64_t last_ca
     if (ret_vertical != RCL_RET_OK) fatal_error();
 }
 
-#ifdef horizontal_actuator
+#ifdef HORIZONTAL_ACTUATOR
 static void horizontal_actuator_command_callback(const void *message) {
     const soil_sampler_interfaces__msg__ActuatorCommand *command = (const soil_sampler_interfaces__msg__ActuatorCommand *)message;
 
@@ -222,7 +223,7 @@ int main(void) {
     if (!load_cell_init(10)) {
         fatal_error();
     }
-    #ifdef horizontal_actuator
+    #ifdef HORIZONTAL_ACTUATOR
     if (!actuator_init(&horizontal_actuator,
             HORIZONTAL_ACTUATOR_PWM_PIN,
             HORIZONTAL_ACTUATOR_DIR_PIN,
@@ -241,7 +242,7 @@ int main(void) {
             VERTICAL_ACTUATOR_HALL_PIN)) {
         fatal_error();
     }
-    #ifdef horizontal_actuator
+    #ifdef HORIZONTAL_ACTUATOR
     actuator_stop(&horizontal_actuator);
     #endif
     actuator_stop(&vertical_actuator);
@@ -262,7 +263,7 @@ int main(void) {
     ret = rclc_publisher_init_default(&load_cell_publisher, &node, ROSIDL_GET_MSG_TYPE_SUPPORT(std_msgs, msg, Float32), "load_cell_reading");
     if (ret != RCL_RET_OK) fatal_error();
 
-    #ifdef horizontal_actuator
+    #ifdef HORIZONTAL_ACTUATOR
     ret = rclc_publisher_init_default(&horizontal_actuator_state_publisher, &node, ROSIDL_GET_MSG_TYPE_SUPPORT(soil_sampler_interfaces, msg, ActuatorState), "horizontal_actuator/state");
     if (ret != RCL_RET_OK) fatal_error();
     #endif
@@ -270,7 +271,7 @@ int main(void) {
     ret = rclc_publisher_init_default(&vertical_actuator_state_publisher, &node, ROSIDL_GET_MSG_TYPE_SUPPORT(soil_sampler_interfaces, msg, ActuatorState), "vertical_actuator/state");
     if (ret != RCL_RET_OK) fatal_error();
 
-    #ifdef horizontal_actuator
+    #ifdef HORIZONTAL_ACTUATOR
     ret = rclc_subscription_init_default(&horizontal_actuator_command_subscription, &node, ROSIDL_GET_MSG_TYPE_SUPPORT(soil_sampler_interfaces, msg, ActuatorCommand), "horizontal_actuator/command");
     if (ret != RCL_RET_OK) fatal_error();
     #endif
@@ -303,7 +304,7 @@ if (ret != RCL_RET_OK) fatal_error();
     ret = rclc_executor_add_timer(&executor, &actuator_position_timer);
     if (ret != RCL_RET_OK) fatal_error();
 
-    #ifdef horizontal_actuator
+    #ifdef HORIZONTAL_ACTUATOR
     ret = rclc_executor_add_subscription(&executor, &horizontal_actuator_command_subscription, &horizontal_actuator_command_message, &horizontal_actuator_command_callback, ON_NEW_DATA);
     if (ret != RCL_RET_OK) fatal_error();
     #endif
@@ -320,7 +321,7 @@ if (ret != RCL_RET_OK) fatal_error();
 
     load_cell_message.data = 0;
 
-    #ifdef horizontal_actuator
+    #ifdef HORIZONTAL_ACTUATOR
     horizontal_actuator_state_message.current_direction = ACTUATOR_STOP;
     horizontal_actuator_state_message.position = 0;
     horizontal_actuator_state_message.enabled = false;
@@ -332,7 +333,7 @@ if (ret != RCL_RET_OK) fatal_error();
     vertical_actuator_state_message.enabled = false;
     vertical_actuator_state_message.fault = false;
 
-    #ifdef horizontal_actuator
+    #ifdef HORIZONTAL_ACTUATOR
     horizontal_actuator_command_message.direction = ACTUATOR_STOP;
     #endif
     vertical_actuator_command_message.direction = ACTUATOR_STOP;
