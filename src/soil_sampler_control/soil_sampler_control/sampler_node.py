@@ -14,7 +14,6 @@ from std_msgs.msg import Float32, Int32, UInt32
 
 from soil_sampler_interfaces.action import TakeSoilSample
 from soil_sampler_interfaces.msg import ActuatorCommand, ActuatorState, SoilSample
-from soil_sampler_interfaces.srv import GetRestDepth
 
 from .sampler_state_machine import SamplerState, SamplerStateMachine
 from .sampler_statistics import calculate_circular_statistics, calculate_mode, calculate_statistics
@@ -78,8 +77,6 @@ class SoilSamplerNode(Node):
         self.pm10_subscription = self.create_subscription(Float32, "sen0658/pm10", self.pm10_callback, 10, callback_group=self.callback_group)
         self.pressure_subscription = self.create_subscription(FluidPressure, "sen0658/atmospheric_pressure", self.pressure_callback, 10, callback_group=self.callback_group)
         self.rainfall_subscription = self.create_subscription(Float32, "sen0658/rainfall", self.rainfall_callback, 10, callback_group=self.callback_group)
-
-        self.rest_depth_service = self.create_service(GetRestDepth, "get_rest_depth", self.get_rest_depth_callback, callback_group=self.callback_group)
 
         self.vertical_actuator_state: ActuatorState | None = None
         self.horizontal_actuator_state: ActuatorState | None = None
@@ -158,13 +155,6 @@ class SoilSamplerNode(Node):
 
     def rainfall_callback(self, message: Float32) -> None:
         self.latest_rainfall = float(message.data)
-
-    def get_rest_depth_callback(self, request: GetRestDepth.Request, response: GetRestDepth.Response) -> GetRestDepth.Response:
-        del request
-        response.rest_depth = self.rest_depth
-        self.get_logger().info(f"Returning rest depth: {self.rest_depth:.3f} m")
-        return response
-
 
     def publish_vertical_command(self, direction: int) -> None:
         command = ActuatorCommand()

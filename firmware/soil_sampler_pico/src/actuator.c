@@ -4,7 +4,7 @@
 #include "hardware/sync.h"
 #include "pico/stdlib.h"
 
-#define HALL_COUNTS_PER_METER 23335.0f
+#define HALL_COUNTS_PER_METER 5000.0f
 
 #define MAX_ACTUATORS 8
 
