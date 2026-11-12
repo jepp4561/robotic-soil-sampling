@@ -30,9 +30,11 @@
 
 #define ACTUATOR_POSITION_PUBLISH_PERIOD_MS 100
 
-// Calibration timing. The vertical actuator starts retracting first; the horizontal one starts CALIBRATION_STAGGER_MS later. Both then keep retracting for CALIBRATION_TIME_MS before being stopped and zeroed.
+// Calibration timing. The vertical actuator starts retracting first; the horizontal one starts CALIBRATION_STAGGER_MS later. Each actuator retracts until its hall count stops changing for CALIBRATION_STALL_TIME_MS (it has reached its limit switch), keeps retracting for CALIBRATION_EXTRA_RETRACT_MS to be sure, and is then stopped and zeroed. If an actuator is still moving after CALIBRATION_RETRACT_TIMEOUT_MS the calibration is aborted.
 #define CALIBRATION_STAGGER_MS 5000
-#define CALIBRATION_TIME_MS 10000
+#define CALIBRATION_STALL_TIME_MS 500
+#define CALIBRATION_EXTRA_RETRACT_MS 1000
+#define CALIBRATION_RETRACT_TIMEOUT_MS 40000
 #define CALIBRATION_EXTEND_TIME_MS 3000   // vertical extends this long after zeroing, to unload friction
 #define CALIBRATION_SETTLE_MS 500         // pause after stopping before biasing the load cell
 #define CALIBRATION_LOAD_CELL_SAMPLES 100
@@ -87,10 +89,7 @@ static rcl_timer_t actuator_position_timer;
 
 typedef enum {
     CALIBRATION_IDLE = 0,
-#ifdef HORIZONTAL_ACTUATOR
-    CALIBRATION_VERTICAL_STAGGER,   // vertical retracting, waiting to start horizontal
-#endif
-    CALIBRATION_RETRACTING,         // all actuators retracting until the deadline
+    CALIBRATION_RETRACTING,         // actuators retracting until each has stopped at its limit
     CALIBRATION_EXTENDING,          // vertical extending briefly to release friction load
     CALIBRATION_LOAD_CELL           // actuators stopped, waiting to settle, then bias the load cell
 } calibration_state_t;
@@ -139,6 +138,89 @@ static void publish_debug(const char *message) {
     if (ret != RCL_RET_OK) fatal_error();
 }
 
+typedef enum {
+    HOMING_IDLE = 0,
+    HOMING_RETRACTING,              // retracting, watching the hall count for movement
+    HOMING_OVERRUN,                 // stopped moving, retracting a little longer to be sure
+    HOMING_DONE                     // stopped and zeroed
+} homing_state_t;
+
+typedef struct {
+    actuator_t *actuator;
+    const char *name;
+    homing_state_t state;
+    int32_t last_hall_count;
+    absolute_time_t last_movement_time;
+    absolute_time_t overrun_deadline;
+    absolute_time_t timeout_deadline;
+} homing_t;
+
+static homing_t vertical_homing;
+#ifdef HORIZONTAL_ACTUATOR
+static homing_t horizontal_homing;
+#endif
+
+static void homing_start(homing_t *homing, actuator_t *actuator, const char *name) {
+    homing->actuator = actuator;
+    homing->name = name;
+    homing->last_hall_count = actuator_get_hall_count(actuator);
+    homing->last_movement_time = get_absolute_time();
+    homing->timeout_deadline = make_timeout_time_ms(CALIBRATION_RETRACT_TIMEOUT_MS);
+    homing->state = HOMING_RETRACTING;
+
+    actuator_retract(actuator);
+}
+
+static bool homing_moved(homing_t *homing) {
+    int32_t count = actuator_get_hall_count(homing->actuator);
+
+    if (count == homing->last_hall_count) {
+        return false;
+    }
+
+    homing->last_hall_count = count;
+    homing->last_movement_time = get_absolute_time();
+    return true;
+}
+
+// Returns false if the actuator is still moving after CALIBRATION_RETRACT_TIMEOUT_MS
+static bool homing_update(homing_t *homing) {
+    char message[64];
+
+    switch (homing->state) {
+    case HOMING_RETRACTING:
+        if (!homing_moved(homing) && absolute_time_diff_us(homing->last_movement_time, get_absolute_time()) >= (int64_t)CALIBRATION_STALL_TIME_MS * 1000) {
+            homing->overrun_deadline = make_timeout_time_ms(CALIBRATION_EXTRA_RETRACT_MS);
+            homing->state = HOMING_OVERRUN;
+
+            snprintf(message, sizeof(message), "%s actuator stopped, retracting %d ms more", homing->name, CALIBRATION_EXTRA_RETRACT_MS);
+            publish_debug(message);
+        } else if (time_reached(homing->timeout_deadline)) {
+            return false;
+        }
+        break;
+
+    case HOMING_OVERRUN:
+        if (homing_moved(homing)) {
+            homing->state = HOMING_RETRACTING;
+        } else if (time_reached(homing->overrun_deadline)) {
+            actuator_stop(homing->actuator);
+            actuator_hall_reset(homing->actuator);
+            homing->state = HOMING_DONE;
+
+            snprintf(message, sizeof(message), "%s actuator at limit and zeroed", homing->name);
+            publish_debug(message);
+        }
+        break;
+
+    case HOMING_IDLE:
+    case HOMING_DONE:
+        break;
+    }
+
+    return true;
+}
+
 static bool calibration_active(void) {
     return calibration_state != CALIBRATION_IDLE;
 }
@@ -156,15 +238,15 @@ static void calibration_start(void) {
 
     publish_debug("Calibration started");
     publish_debug("Retracting vertical actuator");
-    actuator_retract(&vertical_actuator);
+
+    homing_start(&vertical_homing, &vertical_actuator, "Vertical");
 
 #ifdef HORIZONTAL_ACTUATOR
+    horizontal_homing.state = HOMING_IDLE;
     calibration_deadline = make_timeout_time_ms(CALIBRATION_STAGGER_MS);
-    calibration_state = CALIBRATION_VERTICAL_STAGGER;
-#else
-    calibration_deadline = make_timeout_time_ms(CALIBRATION_TIME_MS);
-    calibration_state = CALIBRATION_RETRACTING;
 #endif
+
+    calibration_state = CALIBRATION_RETRACTING;
 }
 
 static void calibration_abort(void) {
@@ -175,6 +257,11 @@ static void calibration_abort(void) {
     actuator_stop(&vertical_actuator);
 #ifdef HORIZONTAL_ACTUATOR
     actuator_stop(&horizontal_actuator);
+#endif
+
+    vertical_homing.state = HOMING_IDLE;
+#ifdef HORIZONTAL_ACTUATOR
+    horizontal_homing.state = HOMING_IDLE;
 #endif
 
     calibration_state = CALIBRATION_IDLE;
@@ -188,29 +275,33 @@ static void calibration_update(void) {
     case CALIBRATION_IDLE:
         break;
 
+    case CALIBRATION_RETRACTING: {
+        bool ok = homing_update(&vertical_homing);
+
 #ifdef HORIZONTAL_ACTUATOR
-    case CALIBRATION_VERTICAL_STAGGER:
-        if (time_reached(calibration_deadline)) {
+        if (horizontal_homing.state == HOMING_IDLE && time_reached(calibration_deadline)) {
             publish_debug("Retracting horizontal actuator");
-            actuator_retract(&horizontal_actuator);
-
-            calibration_deadline = make_timeout_time_ms(CALIBRATION_TIME_MS);
-            calibration_state = CALIBRATION_RETRACTING;
+            homing_start(&horizontal_homing, &horizontal_actuator, "Horizontal");
         }
-        break;
+
+        if (!homing_update(&horizontal_homing)) {
+            ok = false;
+        }
 #endif
 
-    case CALIBRATION_RETRACTING:
-        if (time_reached(calibration_deadline)) {
-            actuator_stop(&vertical_actuator);
-            actuator_hall_reset(&vertical_actuator);
+        if (!ok) {
+            publish_debug("Calibration failed: an actuator was still moving after the retract timeout");
+            calibration_abort();
+            break;
+        }
 
+        bool done = vertical_homing.state == HOMING_DONE;
 #ifdef HORIZONTAL_ACTUATOR
-            actuator_stop(&horizontal_actuator);
-            actuator_hall_reset(&horizontal_actuator);
+        done = done && horizontal_homing.state == HOMING_DONE;
 #endif
 
-            publish_debug("Actuators stopped and positions reset");
+        if (done) {
+            publish_debug("Actuators at their limits and positions reset");
             publish_debug("Extending vertical actuator to release friction load");
 
             actuator_extend(&vertical_actuator);
@@ -219,6 +310,7 @@ static void calibration_update(void) {
             calibration_state = CALIBRATION_EXTENDING;
         }
         break;
+    }
 
     case CALIBRATION_EXTENDING:
         if (time_reached(calibration_deadline)) {
@@ -242,7 +334,10 @@ static void calibration_update(void) {
     }
 }
 
+// Overload protection
+
 static void overload_trigger(float load) {
+    // The overload response takes over from a running calibration
     calibration_abort();
 
     actuator_stop(&vertical_actuator);
@@ -258,6 +353,7 @@ static void overload_trigger(float load) {
     publish_debug(message);
 }
 
+// Call once per main-loop iteration
 static void overload_update(void) {
     if (overload_state != OVERLOAD_RETRACTING) {
         return;
@@ -292,6 +388,7 @@ static void load_cell_timer_callback(rcl_timer_t *timer, int64_t last_call_time)
     float load = load_cell_read_newton();
     load_cell_message.data = load;
 
+    // Check before publishing so the actuator stops as early as possible
     if (!overload_active() && actuator_get_direction(&vertical_actuator) == ACTUATOR_EXTEND && load > MAX_LOAD_N) {
         overload_trigger(load);
     }

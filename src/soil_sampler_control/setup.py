@@ -27,6 +27,7 @@ setup(
             "soil_sampler_node = soil_sampler_control.sampler_node:main",
             "mock_robot_server = soil_sampler_control.mock_robot_server:main",
             "hardware_simulator = soil_sampler_control.hardware_simulator:main",
+            "force_profile_recorder = soil_sampler_control.force_profile_recorder:main",
         ],
     },
 )

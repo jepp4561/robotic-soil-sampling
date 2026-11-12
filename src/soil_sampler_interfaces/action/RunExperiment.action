@@ -4,8 +4,12 @@ float32 drive_speed
 float32 target_depth
 float32 dwell_time
 bool double_row
+float32 force_threshold 50.0
+float32 rate_threshold 11000.0
 ---
 soil_sampler_interfaces/ExperimentSample[] samples
+soil_sampler_interfaces/SkippedLocation[] skipped_locations
+string bag_path
 string message
 bool success
 ---

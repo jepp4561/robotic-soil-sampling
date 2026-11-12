@@ -1,0 +1,9 @@
+float32 position
+---
+bool success
+string message
+float32 final_position
+---
+string current_state
+float32 current_depth
+float32 current_force

@@ -84,6 +84,7 @@ bool actuator_init(
 
     gpio_init(actuator->fault_pin);
     gpio_set_dir(actuator->fault_pin, GPIO_IN);
+    gpio_pull_up(actuator->fault_pin);
 
     gpio_init(actuator->hall_pin);
     gpio_set_dir(actuator->hall_pin, GPIO_IN);

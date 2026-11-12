@@ -1,0 +1,33 @@
+float32 force_threshold
+float32 rate_threshold
+float32 dwell_time
+bool record_bag true
+bool return_after_profile true
+float32 return_depth
+---
+uint8 STOP_REASON_NONE=0
+uint8 STOP_REASON_FORCE_THRESHOLD=1
+uint8 STOP_REASON_MAXIMUM_DEPTH=2
+
+uint8 CLASSIFICATION_NO_ROCK=1
+uint8 CLASSIFICATION_ROCK=2
+
+bool success
+string message
+bool sample_collected
+soil_sampler_interfaces/SoilSample sample
+uint8 stop_reason
+uint8 classification
+string bag_path
+float32 start_depth
+float32 final_depth
+float32 final_force
+float32 peak_force
+float32 max_rate
+uint32 sample_count
+---
+string run_id
+string current_state
+float32 current_depth
+float32 current_force
+float32 max_rate

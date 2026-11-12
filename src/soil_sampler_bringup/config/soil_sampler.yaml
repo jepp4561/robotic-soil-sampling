@@ -19,7 +19,7 @@
     pico_port: "/dev/serial/by-id/usb-Raspberry_Pi_Pico_E6612483CB52B72C-if00"
 
     maximum_depth: 0.3
-    rest_depth: 0.2
+    rest_depth: 0.15
     maximum_force: 100.0
 
     vertical_actuator_timeout: 60.0
