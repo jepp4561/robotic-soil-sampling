@@ -31,9 +31,9 @@ class SoilSamplerExperimentNode(Node):
         self.declare_parameter("move_horizontal_action", "/soil_sampler/move_horizontal")
         self.declare_parameter("sensor_namespace", "/soil_sampler")
         self.declare_parameter("force_profile_topic", "/soil_sampler/force_profile/sample")
-        self.declare_parameter("gps_topic", "")
+        self.declare_parameter("gps_topic", "/gps/fix")
         self.declare_parameter("record_bag", True)
-        self.declare_parameter("bag_directory", "~/soil_sampler_bags/experiments")
+        self.declare_parameter("bag_directory", "/home/ricnuc/ros_ws/mobile_robot_ws/src/robotic-soil-sampling/data/soil_sampler_bags/experiments")
         self.declare_parameter("bag_storage_id", "mcap")
         self.declare_parameter("horizontal_sample_offset_x", 0.0)
         self.declare_parameter("horizontal_sample_offset_y", -0.25)
@@ -49,7 +49,7 @@ class SoilSamplerExperimentNode(Node):
         move_horizontal_action = str(self.get_parameter("move_horizontal_action").value)
         sensor_namespace = str(self.get_parameter("sensor_namespace").value).rstrip("/")
         force_profile_topic = str(self.get_parameter("force_profile_topic").value)
-        gps_topic = str(self.get_parameter("gps_topic").value) or f"/{robot_namespace}/sensors/gps_0/fix"
+        gps_topic = str(self.get_parameter("gps_topic").value)
         self.record_bag = bool(self.get_parameter("record_bag").value)
         self.bag_directory = str(self.get_parameter("bag_directory").value)
         self.bag_storage_id = str(self.get_parameter("bag_storage_id").value)
@@ -97,6 +97,10 @@ class SoilSamplerExperimentNode(Node):
         self.cmd_vel_publisher = self.create_publisher(TwistStamped, self.cmd_vel_topic, 10)
         self.sample_publisher = self.create_publisher(ExperimentSample, "sample", 10)
         self.skipped_location_publisher = self.create_publisher(SkippedLocation, "skipped_location", 10)
+        self.sensor_topics += [
+            (self.sample_publisher.topic_name, ExperimentSample),
+            (self.skipped_location_publisher.topic_name, SkippedLocation),
+        ]
         self.odom_subscription = self.create_subscription(Odometry, self.odom_topic, self.odom_callback, 10, callback_group=self.callback_group)
 
         self.latest_x: float | None = None
@@ -152,12 +156,13 @@ class SoilSamplerExperimentNode(Node):
 
         return False
 
-    def create_sample_location(self, sample, x: float, y: float, heading: float) -> ExperimentSample:
+    def create_sample_location(self, sample, x: float, y: float, heading: float, row: int) -> ExperimentSample:
         result = ExperimentSample()
         result.timestamp = sample.timestamp
         result.x = x
         result.y = y
         result.heading = heading
+        result.row = row
         result.sample = sample
         return result
 
@@ -356,7 +361,7 @@ class SoilSamplerExperimentNode(Node):
         if not probe.sample_collected:
             return False, f"No soil sample was collected at {description}."
 
-        experiment_sample = self.create_sample_location(sample=probe.sample, x=x, y=y, heading=heading)
+        experiment_sample = self.create_sample_location(sample=probe.sample, x=x, y=y, heading=heading, row=row)
 
         result.samples.append(experiment_sample)
         self.sample_publisher.publish(experiment_sample)
